@@ -59,5 +59,10 @@ services:
       - ./backend:/app
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
 
+  mock-subscriber:
+      build: ./mock-subscriber
+      ports:
+        - "9000:9000"
+
 volumes:
   postgres_data:
