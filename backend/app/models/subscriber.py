@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Text
+from sqlalchemy import String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.database import Base
@@ -23,7 +23,6 @@ class Subscriber(Base):
         DateTime, default=datetime.utcnow
     )
 
-    # Relationships
     subscriptions: Mapped[list["Subscription"]] = relationship(
         back_populates="subscriber",
         cascade="all, delete-orphan"
@@ -40,6 +39,7 @@ class Subscription(Base):
     )
     subscriber_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("subscribers.id"),  # this was missing
         nullable=False
     )
     event_type: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -49,7 +49,6 @@ class Subscription(Base):
         DateTime, default=datetime.utcnow
     )
 
-    # Relationships
     subscriber: Mapped["Subscriber"] = relationship(
         back_populates="subscriptions"
     )

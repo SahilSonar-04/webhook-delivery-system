@@ -20,4 +20,5 @@ celery_app.conf.update(
     task_acks_late=True,        # task only removed from queue after completion
     task_reject_on_worker_lost=True,  # requeue if worker crashes mid-task
     worker_prefetch_multiplier=1,     # worker takes one task at a time
+    broker_connection_retry_on_startup=True,
 )
