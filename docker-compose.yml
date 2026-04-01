@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: webhook_user
+      POSTGRES_PASSWORD: webhook_pass
+      POSTGRES_DB: webhook_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webhook_user -d webhook_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=supersecretkey123
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=supersecretkey123
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
