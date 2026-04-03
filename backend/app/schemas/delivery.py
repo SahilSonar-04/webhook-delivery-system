@@ -16,6 +16,13 @@ class AIAnalysisResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventSummary(BaseModel):
+    event_type: str
+    payload: dict
+
+    model_config = {"from_attributes": True}
+
+
 class DeliveryAttemptResponse(BaseModel):
     id: UUID
     event_id: UUID
@@ -31,9 +38,9 @@ class DeliveryAttemptResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     ai_analysis: Optional[AIAnalysisResponse] = None
+    event: Optional[EventSummary] = None
 
     model_config = {"from_attributes": True}
-
 
 class DeliveryAttemptDetail(DeliveryAttemptResponse):
     event: Optional[dict] = None
