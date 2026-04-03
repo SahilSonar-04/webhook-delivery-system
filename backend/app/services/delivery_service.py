@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.orm import selectinload
 from app.models.delivery import DeliveryAttempt, AIFailureAnalysis
 from app.schemas.delivery import DashboardStats
@@ -83,18 +83,10 @@ class DeliveryService:
         result = await db.execute(
             select(
                 func.count(DeliveryAttempt.id).label("total"),
-                func.sum(
-                    func.cast(DeliveryAttempt.status == "delivered", func.Integer)
-                ).label("delivered"),
-                func.sum(
-                    func.cast(DeliveryAttempt.status == "failed", func.Integer)
-                ).label("failed"),
-                func.sum(
-                    func.cast(DeliveryAttempt.status == "pending", func.Integer)
-                ).label("pending"),
-                func.sum(
-                    func.cast(DeliveryAttempt.status == "dead", func.Integer)
-                ).label("dead"),
+                func.sum(case((DeliveryAttempt.status == "delivered", 1), else_=0)).label("delivered"),
+                func.sum(case((DeliveryAttempt.status == "failed", 1), else_=0)).label("failed"),
+                func.sum(case((DeliveryAttempt.status == "pending", 1), else_=0)).label("pending"),
+                func.sum(case((DeliveryAttempt.status == "dead", 1), else_=0)).label("dead"),
             )
         )
         row = result.one()
