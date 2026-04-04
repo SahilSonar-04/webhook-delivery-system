@@ -3,18 +3,47 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, DashboardStats, DeliveryAttempt } from "@/lib/api";
 
-const statusColors: Record<string, string> = {
-  delivered: "bg-green-500",
-  failed: "bg-red-500",
-  pending: "bg-yellow-500",
-  delivering: "bg-blue-500",
-  dead: "bg-gray-500",
+const STATUS_CONFIG: Record<string, { color: string; cls: string }> = {
+  delivered: { color: "var(--green)", cls: "status-delivered" },
+  failed:    { color: "var(--red)",   cls: "status-failed" },
+  pending:   { color: "var(--yellow)",cls: "status-pending" },
+  delivering:{ color: "var(--blue)",  cls: "status-delivering" },
+  dead:      { color: "var(--gray)",  cls: "status-dead" },
 };
+
+function PageHeader({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div style={{
+      padding: "20px 28px",
+      borderBottom: "1px solid var(--border)",
+      display: "flex",
+      alignItems: "baseline",
+      gap: 16,
+    }}>
+      <h1 style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+        {title}
+      </h1>
+      {sub && (
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{sub}</span>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, color, sub }: { label: string; value: string | number; color?: string; sub?: string }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className="stat-value" style={{ color: color || "var(--text-primary)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>{sub}</div>}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
-  const [liveEvents, setLiveEvents] = useState<string[]>([]);
+  const [liveEvents, setLiveEvents] = useState<{ time: string; text: string; type: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,7 +51,7 @@ export default function Dashboard() {
       try {
         const [statsData, attemptsData] = await Promise.all([
           api.get("/api/v1/dashboard/stats"),
-          api.get("/api/v1/dashboard/delivery-attempts?limit=10"),
+          api.get("/api/v1/dashboard/delivery-attempts?limit=12"),
         ]);
         setStats(statsData);
         setAttempts(attemptsData);
@@ -36,14 +65,19 @@ export default function Dashboard() {
     fetchData();
     const interval = setInterval(fetchData, 5000);
 
-    // SSE for live events
-    const sse = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/dashboard/stream`);
+    const sse = new EventSource(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/dashboard/stream`
+    );
     sse.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type !== "heartbeat") {
         setLiveEvents((prev) => [
-          `${new Date().toLocaleTimeString()} — ${data.type}: ${JSON.stringify(data.data).slice(0, 80)}`,
-          ...prev.slice(0, 19),
+          {
+            time: new Date().toLocaleTimeString("en-US", { hour12: false }),
+            text: `[${data.type.toUpperCase()}] ${JSON.stringify(data.data).slice(0, 90)}`,
+            type: data.type,
+          },
+          ...prev.slice(0, 29),
         ]);
       }
     };
@@ -54,119 +88,195 @@ export default function Dashboard() {
     };
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-gray-400">Loading...</div>;
+  if (loading) {
+    return (
+      <div style={{ padding: 28, color: "var(--text-muted)", fontSize: 12 }}>
+        Initializing...
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold">Webhook Dashboard</h1>
-          <div className="flex gap-3">
-            <Link href="/dashboard/events" className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">Events</Link>
-            <Link href="/dashboard/attempts" className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">Attempts</Link>
-            <Link href="/dashboard/dead-letter" className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">Dead Letter</Link>
-            <Link href="/dashboard/subscribers" className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">Subscribers</Link>
-          </div>
-        </div>
+    <div>
+      <PageHeader title="System Overview" sub="Real-time delivery monitoring" />
 
-        {/* Stats */}
+      <div style={{ padding: 28 }}>
+        {/* Primary stats */}
         {stats && (
           <>
-            {/* Row 1: event-level counts */}
-            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Events</p>
-            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-4">
+            <div style={{ marginBottom: 6 }} className="section-label">System Metrics</div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 1,
+              marginBottom: 24,
+              background: "var(--border)",
+              border: "1px solid var(--border)",
+            }}>
+              <StatCard label="Ingested Events" value={stats.total_events.toLocaleString()} color="var(--text-primary)" />
+              <StatCard
+                label="Success Rate"
+                value={`${stats.success_rate}%`}
+                color={stats.success_rate >= 90 ? "var(--green)" : stats.success_rate >= 70 ? "var(--yellow)" : "var(--red)"}
+                sub={`${stats.delivered} of ${stats.total_attempts} attempts`}
+              />
+            </div>
+
+            <div style={{ marginBottom: 6 }} className="section-label">Attempt Breakdown</div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: 1,
+              marginBottom: 24,
+              background: "var(--border)",
+              border: "1px solid var(--border)",
+            }}>
               {[
-                { label: "Ingested Events", value: stats.total_events, color: "text-white" },
-                { label: "Total Attempts", value: stats.total_attempts, color: "text-white" },
+                { label: "Delivered", value: stats.delivered, color: "var(--green)" },
+                { label: "Delivering", value: stats.delivering, color: "var(--blue)" },
+                { label: "Pending", value: stats.pending, color: "var(--yellow)" },
+                { label: "Failed", value: stats.failed, color: "var(--red)" },
+                { label: "Dead", value: stats.dead, color: "var(--gray)" },
               ].map((s) => (
-                <div key={s.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <p className="text-gray-500 text-sm">{s.label}</p>
-                  <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
-                </div>
+                <StatCard key={s.label} label={s.label} value={s.value.toLocaleString()} color={s.color} />
               ))}
             </div>
 
-            {/* Row 2: attempt status breakdown */}
-            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Delivery Attempts</p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-              {[
-                { label: "Delivered", value: stats.delivered, color: "text-green-400" },
-                { label: "Delivering", value: stats.delivering, color: "text-blue-400" },
-                { label: "Pending", value: stats.pending, color: "text-yellow-400" },
-                { label: "Failed", value: stats.failed, color: "text-red-400" },
-                { label: "Dead", value: stats.dead, color: "text-gray-400" },
-              ].map((s) => (
-                <div key={s.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <p className="text-gray-500 text-sm">{s.label}</p>
-                  <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
-                </div>
-              ))}
+            {/* Progress bar */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{
+                height: 3,
+                background: "var(--bg-overlay)",
+                overflow: "hidden",
+                border: "1px solid var(--border)",
+              }}>
+                <div style={{
+                  height: "100%",
+                  width: `${stats.success_rate}%`,
+                  background: stats.success_rate >= 90 ? "var(--green)" : stats.success_rate >= 70 ? "var(--yellow)" : "var(--red)",
+                  transition: "width 0.6s ease",
+                }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: "var(--text-muted)" }}>
+                <span>0%</span>
+                <span>DELIVERY SUCCESS RATE</span>
+                <span>100%</span>
+              </div>
             </div>
           </>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Attempts */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-            <h2 className="font-semibold mb-4 text-gray-300">Recent Delivery Attempts</h2>
-            <div className="space-y-2">
-              {attempts.map((a) => (
-                <Link key={a.id} href={`/dashboard/attempts/${a.id}`}>
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${statusColors[a.status] || "bg-gray-500"}`} />
-                      <div>
-                        <p className="text-sm font-medium">{a.event?.event_type || "unknown"}</p>
-                        <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">#{a.attempt_number}</span>
-                      <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-300">
-                        {a.status}
+        {/* Two column section */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "var(--border)", border: "1px solid var(--border)" }}>
+          {/* Recent attempts */}
+          <div style={{ background: "var(--bg-base)" }}>
+            <div style={{
+              padding: "10px 16px",
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+              <span className="section-label">Recent Attempts</span>
+              <Link href="/dashboard/attempts" style={{ fontSize: 10, color: "var(--amber)", letterSpacing: "0.06em" }}>
+                VIEW ALL →
+              </Link>
+            </div>
+
+            <div>
+              {attempts.length === 0 && (
+                <div style={{ padding: "24px 16px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+                  No delivery attempts yet.
+                </div>
+              )}
+              {attempts.map((a, i) => {
+                const cfg = STATUS_CONFIG[a.status] || { color: "var(--gray)", cls: "status-dead" };
+                return (
+                  <Link key={a.id} href={`/dashboard/attempts/${a.id}`} style={{ display: "block" }}>
+                    <div style={{
+                      padding: "8px 16px",
+                      borderBottom: "1px solid var(--border)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      cursor: "pointer",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-raised)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span className={`status-dot ${cfg.cls}`} />
+                      <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {a.event?.event_type || "unknown"}
                       </span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>#{a.attempt_number}</span>
+                      <span style={{ fontSize: 10, color: cfg.color, minWidth: 60, textAlign: "right" }}>{a.status}</span>
+                      {a.duration_ms && (
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 48, textAlign: "right" }}>
+                          {Math.round(a.duration_ms)}ms
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </Link>
-              ))}
-              {attempts.length === 0 && <p className="text-gray-500 text-sm text-center py-4">No delivery attempts yet</p>}
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
-          {/* Live Events Feed */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <h2 className="font-semibold text-gray-300">Live Event Stream</h2>
+          {/* Live feed */}
+          <div style={{ background: "var(--bg-base)" }}>
+            <div style={{
+              padding: "10px 16px",
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}>
+              <span className="status-dot status-delivered live-dot" style={{ width: 5, height: 5 }} />
+              <span className="section-label">Live Event Stream</span>
             </div>
-            <div className="space-y-1 font-mono text-xs">
-              {liveEvents.length === 0 && <p className="text-gray-500 text-center py-4">Waiting for events...</p>}
-              {liveEvents.map((e, i) => (
-                <div key={i} className="text-gray-400 p-2 bg-gray-800 rounded truncate">{e}</div>
+
+            <div style={{
+              padding: 0,
+              height: 384,
+              overflow: "hidden",
+              fontFamily: "var(--font-mono)",
+            }}>
+              {liveEvents.length === 0 && (
+                <div style={{ padding: "24px 16px", fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>
+                  Waiting for events...
+                </div>
+              )}
+              {liveEvents.map((ev, i) => (
+                <div key={i} style={{
+                  display: "flex",
+                  gap: 10,
+                  padding: "5px 16px",
+                  borderBottom: "1px solid var(--border)",
+                  animation: i === 0 ? "slide-in 0.2s ease" : "none",
+                  opacity: Math.max(0.3, 1 - i * 0.06),
+                }}>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>{ev.time}</span>
+                  <span style={{
+                    fontSize: 11,
+                    color: ev.type.includes("success") || ev.type.includes("delivered")
+                      ? "var(--green)"
+                      : ev.type.includes("dead")
+                      ? "var(--red)"
+                      : ev.type.includes("failed")
+                      ? "var(--yellow)"
+                      : "var(--text-secondary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {ev.text}
+                  </span>
+                </div>
               ))}
             </div>
           </div>
         </div>
-
-        {/* Success Rate */}
-        {stats && (
-          <div className="mt-6 bg-gray-900 rounded-xl border border-gray-800 p-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-400 text-sm">Delivery Success Rate</span>
-              <span className="text-green-400 font-bold">{stats.success_rate}%</span>
-            </div>
-            <div className="w-full bg-gray-800 rounded-full h-2">
-              <div
-                className="bg-green-500 h-2 rounded-full transition-all"
-                style={{ width: `${stats.success_rate}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-600 mt-1">
-              {stats.delivered} delivered out of {stats.total_attempts} total attempts
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

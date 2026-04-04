@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Webhook Delivery System",
+  title: "WDS — Webhook Delivery System",
   description: "Reliable async webhook delivery with AI failure analysis",
 };
 
@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-950 text-gray-100 min-h-screen">
+      <body>
         {children}
       </body>
     </html>

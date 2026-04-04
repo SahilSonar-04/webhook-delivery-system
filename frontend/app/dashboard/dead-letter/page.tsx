@@ -6,6 +6,7 @@ import { api, DeliveryAttempt } from "@/lib/api";
 export default function DeadLetterPage() {
   const [attempts, setAttempts] = useState<DeliveryAttempt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   const fetchDead = async () => {
     try {
@@ -21,48 +22,136 @@ export default function DeadLetterPage() {
   useEffect(() => { fetchDead(); }, []);
 
   const handleRetry = async (id: string) => {
+    setRetrying(id);
     try {
       await api.post(`/api/v1/dashboard/delivery-attempts/${id}/retry`, {});
       await fetchDead();
     } catch (e) {
       console.error(e);
+    } finally {
+      setRetrying(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-300">← Back</Link>
-          <h1 className="text-2xl font-bold">Dead Letter Queue</h1>
-          <span className="bg-red-900 text-red-300 text-sm px-3 py-1 rounded-full">{attempts.length} items</span>
-        </div>
+    <div>
+      <div style={{
+        padding: "20px 28px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+      }}>
+        <h1 style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>Dead Letter Queue</h1>
+        <span style={{
+          fontSize: 11,
+          color: attempts.length > 0 ? "var(--red)" : "var(--text-muted)",
+          background: attempts.length > 0 ? "var(--red-glow)" : "var(--bg-raised)",
+          border: `1px solid ${attempts.length > 0 ? "rgba(239,68,68,0.2)" : "var(--border)"}`,
+          padding: "1px 8px",
+          borderRadius: "var(--radius)",
+        }}>
+          {attempts.length} items
+        </span>
+      </div>
 
-        {loading ? <p className="text-gray-400">Loading...</p> : (
-          <div className="space-y-4">
-            {attempts.length === 0 && (
-              <div className="bg-gray-900 rounded-xl border border-gray-800 p-8 text-center text-gray-500">
-                No dead letter events 🎉
-              </div>
-            )}
+      <div style={{ padding: 28 }}>
+        {loading ? (
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading...</div>
+        ) : attempts.length === 0 ? (
+          <div className="card" style={{
+            padding: 48,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 24, marginBottom: 8, color: "var(--green)" }}>✓</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              Dead letter queue is empty.
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
+              All events have been delivered or are in retry.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 1, background: "var(--border)", border: "1px solid var(--border)" }}>
             {attempts.map((a) => (
-              <div key={a.id} className="bg-gray-900 rounded-xl border border-red-900 p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium">{a.event?.event_type || "unknown"}</p>
-                    <p className="text-sm text-gray-500 mt-1">Failed after {a.attempt_number} attempts</p>
-                    {a.error_message && <p className="text-sm text-red-400 mt-1 font-mono">{a.error_message}</p>}
-                    {a.ai_analysis && (
-                      <div className="mt-2 bg-gray-800 rounded-lg p-3">
-                        <p className="text-xs text-purple-400 mb-1">🤖 AI Analysis: {a.ai_analysis.failure_category}</p>
-                        <p className="text-xs text-gray-400">{a.ai_analysis.suggested_fix}</p>
-                      </div>
-                    )}
+              <div key={a.id} style={{
+                background: "var(--bg-base)",
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 20,
+              }}>
+                {/* Left: status strip */}
+                <div style={{
+                  width: 3,
+                  alignSelf: "stretch",
+                  background: "var(--red)",
+                  flexShrink: 0,
+                  borderRadius: 1,
+                }} />
+
+                {/* Center: info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span className="tag tag-amber">{a.event?.event_type || "unknown"}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      Failed after {a.attempt_number} attempt{a.attempt_number !== 1 ? "s" : ""}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                      {new Date(a.created_at).toLocaleString("en-US", {
+                        month: "short", day: "2-digit",
+                        hour: "2-digit", minute: "2-digit", hour12: false
+                      })}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    <Link href={`/dashboard/attempts/${a.id}`} className="bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-sm">View</Link>
-                    <button onClick={() => handleRetry(a.id)} className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm">Retry</button>
-                  </div>
+
+                  {a.error_message && (
+                    <div style={{
+                      fontSize: 11,
+                      color: "var(--red)",
+                      fontFamily: "var(--font-mono)",
+                      background: "var(--red-glow)",
+                      border: "1px solid rgba(239,68,68,0.15)",
+                      padding: "5px 10px",
+                      borderRadius: "var(--radius)",
+                      marginBottom: 8,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {a.error_message}
+                    </div>
+                  )}
+
+                  {a.ai_analysis && (
+                    <div style={{
+                      fontSize: 11,
+                      color: "var(--text-secondary)",
+                      background: "var(--amber-glow)",
+                      border: "1px solid rgba(245,158,11,0.15)",
+                      padding: "6px 10px",
+                      borderRadius: "var(--radius)",
+                    }}>
+                      <span style={{ color: "var(--amber)", marginRight: 6, letterSpacing: "0.04em" }}>
+                        ◆ {a.ai_analysis.failure_category.toUpperCase()}
+                      </span>
+                      {a.ai_analysis.suggested_fix}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: actions */}
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <Link href={`/dashboard/attempts/${a.id}`} className="btn btn-ghost btn-sm">
+                    View
+                  </Link>
+                  <button
+                    onClick={() => handleRetry(a.id)}
+                    disabled={retrying === a.id}
+                    className="btn btn-primary btn-sm"
+                  >
+                    {retrying === a.id ? "Queuing…" : "Retry"}
+                  </button>
                 </div>
               </div>
             ))}

@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { api, Subscriber } from "@/lib/api";
 
 export default function SubscribersPage() {
@@ -8,8 +7,10 @@ export default function SubscribersPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [newApiKey, setNewApiKey] = useState("");
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     api.get("/api/v1/subscribers")
@@ -19,7 +20,11 @@ export default function SubscribersPage() {
   }, []);
 
   const handleCreate = async () => {
-    if (!name || !email) return;
+    if (!name.trim() || !email.trim()) {
+      setError("Name and email are required.");
+      return;
+    }
+    setError(null);
     setCreating(true);
     try {
       const result = await api.post("/api/v1/subscribers", { name, email });
@@ -27,62 +32,147 @@ export default function SubscribersPage() {
       setSubscribers((prev) => [result, ...prev]);
       setName("");
       setEmail("");
-    } catch (e) {
-      console.error(e);
+    } catch (e: unknown) {
+      setError("Failed to create subscriber. Email may already be in use.");
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-300">← Back</Link>
-          <h1 className="text-2xl font-bold">Subscribers</h1>
+    <div>
+      <div style={{
+        padding: "20px 28px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <h1 style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>Subscribers</h1>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{subscribers.length} registered</span>
         </div>
+        <button
+          onClick={() => { setShowForm(!showForm); setNewApiKey(null); setError(null); }}
+          className="btn btn-primary btn-sm"
+        >
+          {showForm ? "Cancel" : "+ Register Subscriber"}
+        </button>
+      </div>
 
-        {/* Create Form */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 mb-6">
-          <h2 className="font-semibold mb-4 text-gray-300">Register New Subscriber</h2>
-          <div className="flex gap-3">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-blue-500" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-blue-500" />
-            <button onClick={handleCreate} disabled={creating} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded-lg text-sm">
-              {creating ? "Creating..." : "Create"}
-            </button>
-          </div>
-
-          {newApiKey && (
-            <div className="mt-4 bg-green-950 border border-green-800 rounded-lg p-3">
-              <p className="text-green-400 text-sm font-medium mb-1">✅ API Key (save this — shown only once)</p>
-              <p className="text-green-300 text-sm font-mono break-all">{newApiKey}</p>
+      <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Create form */}
+        {showForm && (
+          <div className="card" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+              <span className="section-label">Register New Subscriber</span>
             </div>
-          )}
-        </div>
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--text-muted)", display: "block", marginBottom: 5, textTransform: "uppercase" }}>
+                    Name
+                  </label>
+                  <input
+                    className="input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Payments Service"
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--text-muted)", display: "block", marginBottom: 5, textTransform: "uppercase" }}>
+                    Email
+                  </label>
+                  <input
+                    className="input"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. ops@company.com"
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  />
+                </div>
+              </div>
 
-        {/* List */}
-        {loading ? <p className="text-gray-400">Loading...</p> : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <table className="w-full">
+              {error && (
+                <div style={{ fontSize: 11, color: "var(--red)", padding: "6px 10px", background: "var(--red-glow)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "var(--radius)" }}>
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <button
+                  onClick={handleCreate}
+                  disabled={creating}
+                  className="btn btn-primary"
+                >
+                  {creating ? "Creating..." : "Register"}
+                </button>
+              </div>
+
+              {newApiKey && (
+                <div style={{
+                  padding: "12px 16px",
+                  background: "var(--green-glow)",
+                  border: "1px solid rgba(16,185,129,0.2)",
+                  borderRadius: "var(--radius)",
+                }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--green)", marginBottom: 6, textTransform: "uppercase" }}>
+                    ✓ Subscriber Created — Save This API Key
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                    {newApiKey}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 5 }}>
+                    This key will not be shown again.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Table */}
+        {loading ? (
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading...</div>
+        ) : (
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-gray-800 text-gray-500 text-sm">
-                  <th className="text-left p-4">Name</th>
-                  <th className="text-left p-4">Email</th>
-                  <th className="text-left p-4">Status</th>
-                  <th className="text-left p-4">Created</th>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Registered</th>
                 </tr>
               </thead>
               <tbody>
                 {subscribers.map((s) => (
-                  <tr key={s.id} className="border-b border-gray-800">
-                    <td className="p-4 text-sm">{s.name}</td>
-                    <td className="p-4 text-sm text-gray-400">{s.email}</td>
-                    <td className="p-4"><span className={`text-xs px-2 py-1 rounded-full ${s.is_active ? "bg-green-900 text-green-400" : "bg-gray-800 text-gray-400"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
-                    <td className="p-4 text-sm text-gray-400">{new Date(s.created_at).toLocaleDateString()}</td>
+                  <tr key={s.id}>
+                    <td style={{ color: "var(--text-primary)", fontWeight: 400 }}>{s.name}</td>
+                    <td style={{ color: "var(--text-secondary)" }}>{s.email}</td>
+                    <td>
+                      <span className={`tag ${s.is_active ? "tag-green" : "tag-gray"}`}>
+                        {s.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                      {new Date(s.created_at).toLocaleDateString("en-US", {
+                        year: "numeric", month: "short", day: "2-digit"
+                      })}
+                    </td>
                   </tr>
                 ))}
-                {subscribers.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-500">No subscribers yet</td></tr>}
+                {subscribers.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
+                      No subscribers registered yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

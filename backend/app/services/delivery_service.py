@@ -122,11 +122,14 @@ class DeliveryService:
         if not attempt:
             return None
         attempt.status = "pending"
-        # Set to MAX_RETRY_ATTEMPTS - 1 so the worker gets exactly one more
-        # attempt before marking the row dead again. Resetting to 0 would
-        # silently restart the full retry cycle, bypassing the dead-letter guard.
+        # Set to MAX_RETRY_ATTEMPTS - 2 so that after the worker increments
+        # attempt_number by 1, it becomes MAX_RETRY_ATTEMPTS - 1, which is
+        # still below the dead-letter threshold and delivery is actually
+        # attempted. The previous value (MAX_RETRY_ATTEMPTS - 1) caused the
+        # worker to increment to MAX_RETRY_ATTEMPTS, immediately hit the >=
+        # check, and mark the attempt dead without ever sending the request.
         from app.core.config import settings
-        attempt.attempt_number = settings.MAX_RETRY_ATTEMPTS - 1
+        attempt.attempt_number = settings.MAX_RETRY_ATTEMPTS - 2
         attempt.next_retry_at = None
         attempt.error_message = None
         attempt.response_code = None

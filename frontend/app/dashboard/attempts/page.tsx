@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, DeliveryAttempt } from "@/lib/api";
 
-const statusColors: Record<string, string> = {
-  delivered: "text-green-400",
-  failed: "text-red-400",
-  pending: "text-yellow-400",
-  delivering: "text-blue-400",
-  dead: "text-gray-400",
+const STATUSES = ["", "pending", "delivering", "delivered", "failed", "dead"] as const;
+
+const STATUS_CONFIG: Record<string, { color: string; tagCls: string; dotCls: string }> = {
+  delivered:  { color: "var(--green)",  tagCls: "tag-green",  dotCls: "status-delivered" },
+  failed:     { color: "var(--red)",    tagCls: "tag-red",    dotCls: "status-failed" },
+  pending:    { color: "var(--yellow)", tagCls: "tag-yellow", dotCls: "status-pending" },
+  delivering: { color: "var(--blue)",   tagCls: "tag-blue",   dotCls: "status-delivering" },
+  dead:       { color: "var(--gray)",   tagCls: "tag-gray",   dotCls: "status-dead" },
 };
 
 export default function AttemptsPage() {
@@ -17,75 +19,132 @@ export default function AttemptsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAttempts = async () => {
-      try {
-        const url = filter
-          ? `/api/v1/dashboard/delivery-attempts?status=${filter}&limit=50`
-          : "/api/v1/dashboard/delivery-attempts?limit=50";
-        const data = await api.get(url);
-        setAttempts(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAttempts();
+    setLoading(true);
+    const url = filter
+      ? `/api/v1/dashboard/delivery-attempts?status=${filter}&limit=50`
+      : "/api/v1/dashboard/delivery-attempts?limit=50";
+    api.get(url)
+      .then(setAttempts)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [filter]);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-300">← Back</Link>
-          <h1 className="text-2xl font-bold">Delivery Attempts</h1>
+    <div>
+      <div style={{
+        padding: "20px 28px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <h1 style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>Delivery Attempts</h1>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{attempts.length} shown</span>
         </div>
 
-        {/* Filter */}
-        <div className="flex gap-2 mb-6">
-          {["", "pending", "delivering", "delivered", "failed", "dead"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-3 py-1 rounded-lg text-sm ${filter === s ? "bg-blue-600" : "bg-gray-800 hover:bg-gray-700"}`}
-            >
-              {s || "All"}
-            </button>
-          ))}
+        {/* Filter tabs */}
+        <div style={{ display: "flex", gap: 1, background: "var(--border)", border: "1px solid var(--border)" }}>
+          {STATUSES.map((s) => {
+            const active = filter === s;
+            return (
+              <button
+                key={s}
+                onClick={() => setFilter(s)}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: 11,
+                  fontFamily: "var(--font-mono)",
+                  letterSpacing: "0.06em",
+                  background: active ? "var(--amber)" : "var(--bg-surface)",
+                  color: active ? "var(--bg-base)" : "var(--text-muted)",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.1s",
+                  textTransform: "uppercase",
+                }}
+              >
+                {s || "All"}
+              </button>
+            );
+          })}
         </div>
+      </div>
 
+      <div style={{ padding: 28 }}>
         {loading ? (
-          <p className="text-gray-400">Loading...</p>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading...</div>
         ) : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <table className="w-full">
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-gray-800 text-gray-500 text-sm">
-                  <th className="text-left p-4">Event Type</th>
-                  <th className="text-left p-4">Status</th>
-                  <th className="text-left p-4">Attempt</th>
-                  <th className="text-left p-4">Response</th>
-                  <th className="text-left p-4">Duration</th>
-                  <th className="text-left p-4">Time</th>
-                  <th className="text-left p-4"></th>
+                <tr>
+                  <th>Status</th>
+                  <th>Event Type</th>
+                  <th>Attempt</th>
+                  <th>Response</th>
+                  <th>Duration</th>
+                  <th>AI</th>
+                  <th>Created</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {attempts.map((a) => (
-                  <tr key={a.id} className="border-b border-gray-800 hover:bg-gray-800">
-                    <td className="p-4 text-sm">{a.event?.event_type || "—"}</td>
-                    <td className={`p-4 text-sm font-medium ${statusColors[a.status]}`}>{a.status}</td>
-                    <td className="p-4 text-sm text-gray-400">#{a.attempt_number}</td>
-                    <td className="p-4 text-sm text-gray-400">{a.response_code || "—"}</td>
-                    <td className="p-4 text-sm text-gray-400">{a.duration_ms ? `${a.duration_ms.toFixed(0)}ms` : "—"}</td>
-                    <td className="p-4 text-sm text-gray-400">{new Date(a.created_at).toLocaleString()}</td>
-                    <td className="p-4">
-                      <Link href={`/dashboard/attempts/${a.id}`} className="text-blue-400 text-sm hover:underline">View</Link>
+                {attempts.map((a) => {
+                  const cfg = STATUS_CONFIG[a.status] || { color: "var(--gray)", tagCls: "tag-gray", dotCls: "status-dead" };
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                          <span className={`status-dot ${cfg.dotCls}`} />
+                          <span className={`tag ${cfg.tagCls}`}>{a.status}</span>
+                        </div>
+                      </td>
+                      <td style={{ color: "var(--text-primary)", fontWeight: 400 }}>
+                        {a.event?.event_type || <span style={{ color: "var(--text-muted)" }}>—</span>}
+                      </td>
+                      <td style={{ color: "var(--text-muted)" }}>#{a.attempt_number}</td>
+                      <td>
+                        {a.response_code ? (
+                          <span className={`tag ${a.response_code < 300 ? "tag-green" : a.response_code < 500 ? "tag-yellow" : "tag-red"}`}>
+                            {a.response_code}
+                          </span>
+                        ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                      </td>
+                      <td style={{ color: "var(--text-muted)" }}>
+                        {a.duration_ms ? `${Math.round(a.duration_ms)}ms` : "—"}
+                      </td>
+                      <td>
+                        {a.ai_analysis ? (
+                          <span className="tag tag-amber" title={a.ai_analysis.failure_category}>
+                            {a.ai_analysis.severity}
+                          </span>
+                        ) : <span style={{ color: "var(--text-dim)" }}>—</span>}
+                      </td>
+                      <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        {new Date(a.created_at).toLocaleString("en-US", {
+                          month: "short", day: "2-digit",
+                          hour: "2-digit", minute: "2-digit", hour12: false
+                        })}
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/attempts/${a.id}`}
+                          className="btn btn-ghost btn-sm"
+                        >
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {attempts.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
+                      No attempts found.
                     </td>
                   </tr>
-                ))}
-                {attempts.length === 0 && (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-500">No attempts found</td></tr>
                 )}
               </tbody>
             </table>

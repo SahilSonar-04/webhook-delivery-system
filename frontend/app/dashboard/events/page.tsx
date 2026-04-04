@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { api, Event } from "@/lib/api";
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     api.get("/api/v1/events?limit=50")
@@ -14,43 +14,81 @@ export default function EventsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-300">← Back</Link>
-          <h1 className="text-2xl font-bold">Events</h1>
-          <span className="bg-gray-800 text-gray-400 text-sm px-3 py-1 rounded-full">{events.length} total</span>
-        </div>
+  const filtered = events.filter(
+    (e) =>
+      !search ||
+      e.event_type.toLowerCase().includes(search.toLowerCase()) ||
+      e.producer_id.toLowerCase().includes(search.toLowerCase()) ||
+      e.idempotency_key.toLowerCase().includes(search.toLowerCase())
+  );
 
-        {loading ? <p className="text-gray-400">Loading...</p> : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <table className="w-full">
+  return (
+    <div>
+      {/* Header */}
+      <div style={{
+        padding: "20px 28px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <h1 style={{ fontSize: 14, fontWeight: 500, color: "var(--text-primary)" }}>Events</h1>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{events.length} total</span>
+        </div>
+        <input
+          className="input"
+          style={{ width: 240 }}
+          placeholder="Search events..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* Table */}
+      <div style={{ padding: 28 }}>
+        {loading ? (
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading...</div>
+        ) : (
+          <div className="card" style={{ overflow: "hidden" }}>
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-gray-800 text-gray-500 text-sm">
-                  <th className="text-left p-4">Event Type</th>
-                  <th className="text-left p-4">Producer</th>
-                  <th className="text-left p-4">Idempotency Key</th>
-                  <th className="text-left p-4">Payload</th>
-                  <th className="text-left p-4">Time</th>
+                <tr>
+                  <th>Event Type</th>
+                  <th>Producer ID</th>
+                  <th>Idempotency Key</th>
+                  <th>Payload Preview</th>
+                  <th>Ingested</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((e) => (
-                  <tr key={e.id} className="border-b border-gray-800 hover:bg-gray-800">
-                    <td className="p-4">
-                      <span className="bg-blue-900 text-blue-300 text-xs px-2 py-1 rounded">{e.event_type}</span>
+                {filtered.map((e) => (
+                  <tr key={e.id}>
+                    <td>
+                      <span className="tag tag-amber">{e.event_type}</span>
                     </td>
-                    <td className="p-4 text-sm text-gray-400">{e.producer_id}</td>
-                    <td className="p-4 text-sm text-gray-500 font-mono">{e.idempotency_key}</td>
-                    <td className="p-4 text-sm text-gray-400 max-w-xs truncate">
-                      {JSON.stringify(e.payload).slice(0, 60)}...
+                    <td style={{ color: "var(--text-secondary)" }}>{e.producer_id}</td>
+                    <td style={{ color: "var(--text-muted)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {e.idempotency_key}
                     </td>
-                    <td className="p-4 text-sm text-gray-400">{new Date(e.created_at).toLocaleString()}</td>
+                    <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", color: "var(--text-muted)" }}>
+                      {JSON.stringify(e.payload).slice(0, 60)}…
+                    </td>
+                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                      {new Date(e.created_at).toLocaleString("en-US", {
+                        month: "short", day: "2-digit",
+                        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+                      })}
+                    </td>
                   </tr>
                 ))}
-                {events.length === 0 && (
-                  <tr><td colSpan={5} className="p-8 text-center text-gray-500">No events yet</td></tr>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
+                      {search ? "No events match your search." : "No events ingested yet."}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
