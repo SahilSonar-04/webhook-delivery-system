@@ -37,11 +37,14 @@ export default function Dashboard() {
     const interval = setInterval(fetchData, 5000);
 
     // SSE for live events
-    const sse = new EventSource("http://localhost:8000/api/v1/dashboard/stream");
+    const sse = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/dashboard/stream`);
     sse.onmessage = (e) => {
       const data = JSON.parse(e.data);
       if (data.type !== "heartbeat") {
-        setLiveEvents((prev) => [`${new Date().toLocaleTimeString()} — ${data.type}: ${JSON.stringify(data.data).slice(0, 80)}`, ...prev.slice(0, 19)]);
+        setLiveEvents((prev) => [
+          `${new Date().toLocaleTimeString()} — ${data.type}: ${JSON.stringify(data.data).slice(0, 80)}`,
+          ...prev.slice(0, 19),
+        ]);
       }
     };
 
@@ -69,20 +72,38 @@ export default function Dashboard() {
 
         {/* Stats */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            {[
-              { label: "Total", value: stats.total_events, color: "text-white" },
-              { label: "Delivered", value: stats.delivered, color: "text-green-400" },
-              { label: "Failed", value: stats.failed, color: "text-red-400" },
-              { label: "Pending", value: stats.pending, color: "text-yellow-400" },
-              { label: "Dead", value: stats.dead, color: "text-gray-400" },
-            ].map((s) => (
-              <div key={s.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                <p className="text-gray-500 text-sm">{s.label}</p>
-                <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
-              </div>
-            ))}
-          </div>
+          <>
+            {/* Row 1: event-level counts */}
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Events</p>
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4 mb-4">
+              {[
+                { label: "Ingested Events", value: stats.total_events, color: "text-white" },
+                { label: "Total Attempts", value: stats.total_attempts, color: "text-white" },
+              ].map((s) => (
+                <div key={s.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+                  <p className="text-gray-500 text-sm">{s.label}</p>
+                  <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Row 2: attempt status breakdown */}
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Delivery Attempts</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+              {[
+                { label: "Delivered", value: stats.delivered, color: "text-green-400" },
+                { label: "Delivering", value: stats.delivering, color: "text-blue-400" },
+                { label: "Pending", value: stats.pending, color: "text-yellow-400" },
+                { label: "Failed", value: stats.failed, color: "text-red-400" },
+                { label: "Dead", value: stats.dead, color: "text-gray-400" },
+              ].map((s) => (
+                <div key={s.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+                  <p className="text-gray-500 text-sm">{s.label}</p>
+                  <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -102,7 +123,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">#{a.attempt_number}</span>
-                      <span className={`text-xs px-2 py-1 rounded-full ${statusColors[a.status]} bg-opacity-20 text-${a.status === "delivered" ? "green" : a.status === "failed" || a.status === "dead" ? "red" : "yellow"}-400`}>
+                      <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-300">
                         {a.status}
                       </span>
                     </div>
@@ -132,12 +153,18 @@ export default function Dashboard() {
         {stats && (
           <div className="mt-6 bg-gray-900 rounded-xl border border-gray-800 p-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-400 text-sm">Success Rate</span>
+              <span className="text-gray-400 text-sm">Delivery Success Rate</span>
               <span className="text-green-400 font-bold">{stats.success_rate}%</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-2">
-              <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${stats.success_rate}%` }} />
+              <div
+                className="bg-green-500 h-2 rounded-full transition-all"
+                style={{ width: `${stats.success_rate}%` }}
+              />
             </div>
+            <p className="text-xs text-gray-600 mt-1">
+              {stats.delivered} delivered out of {stats.total_attempts} total attempts
+            </p>
           </div>
         )}
       </div>

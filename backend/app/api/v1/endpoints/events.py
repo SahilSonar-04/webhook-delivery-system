@@ -36,17 +36,22 @@ async def ingest_event(
             "queued": 0,
         }
 
-    # Create delivery attempt for each subscription and queue
+    # Create all delivery attempts and flush to get stable IDs.
+    # Celery tasks are enqueued after the flush so workers never race an
+    # uncommitted transaction. get_db commits the full transaction on exit.
     queued = 0
+    attempt_ids: list[str] = []
     for subscription in subscriptions:
         attempt = await delivery_service.create_delivery_attempt(
             db, event.id, subscription.id
         )
-        await db.commit()
-
-        # Queue async delivery task
-        deliver_webhook.delay(str(attempt.id))
+        attempt_ids.append(str(attempt.id))
         queued += 1
+
+    await db.flush()
+
+    for attempt_id in attempt_ids:
+        deliver_webhook.delay(attempt_id)
 
     return {
         "event_id": str(event.id),

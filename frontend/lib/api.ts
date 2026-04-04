@@ -1,8 +1,10 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-console.log("API URL:", process.env.NEXT_PUBLIC_API_URL);
+
 export const api = {
-  async get(path: string) {
-    const res = await fetch(`${API_URL}${path}`);
+  async get(path: string, headers?: Record<string, string>) {
+    const res = await fetch(`${API_URL}${path}`, {
+      headers: { ...headers },
+    });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
   },
@@ -46,10 +48,14 @@ export type DeliveryAttempt = {
 };
 
 export type DashboardStats = {
+  /** Unique ingested events */
   total_events: number;
+  /** Total delivery attempts across all events */
+  total_attempts: number;
   delivered: number;
   failed: number;
   pending: number;
+  delivering: number;
   dead: number;
   success_rate: number;
 };

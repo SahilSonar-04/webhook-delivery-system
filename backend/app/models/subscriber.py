@@ -42,7 +42,7 @@ class Subscription(Base):
         ForeignKey("subscribers.id"),  # this was missing
         nullable=False
     )
-    event_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     target_url: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(

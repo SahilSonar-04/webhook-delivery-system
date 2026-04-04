@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from sqlalchemy.orm import selectinload
 from app.models.delivery import DeliveryAttempt, AIFailureAnalysis
+from app.models.event import Event
 from app.schemas.delivery import DashboardStats
 
 
@@ -80,26 +81,36 @@ class DeliveryService:
     async def get_dashboard_stats(
         self, db: AsyncSession
     ) -> DashboardStats:
-        result = await db.execute(
+        # Count actual unique events (not delivery attempts)
+        event_count_result = await db.execute(
+            select(func.count(Event.id))
+        )
+        total_events = event_count_result.scalar() or 0
+
+        # Count delivery attempts by status
+        attempts_result = await db.execute(
             select(
-                func.count(DeliveryAttempt.id).label("total"),
+                func.count(DeliveryAttempt.id).label("total_attempts"),
                 func.sum(case((DeliveryAttempt.status == "delivered", 1), else_=0)).label("delivered"),
                 func.sum(case((DeliveryAttempt.status == "failed", 1), else_=0)).label("failed"),
                 func.sum(case((DeliveryAttempt.status == "pending", 1), else_=0)).label("pending"),
+                func.sum(case((DeliveryAttempt.status == "delivering", 1), else_=0)).label("delivering"),
                 func.sum(case((DeliveryAttempt.status == "dead", 1), else_=0)).label("dead"),
             )
         )
-        row = result.one()
-        total = row.total or 0
-        delivered = row.delivered or 0
+        row = attempts_result.one()
+        total_attempts = row.total_attempts or 0
+        delivered = int(row.delivered or 0)
 
         return DashboardStats(
-            total_events=total,
+            total_events=total_events,
+            total_attempts=total_attempts,
             delivered=delivered,
-            failed=row.failed or 0,
-            pending=row.pending or 0,
-            dead=row.dead or 0,
-            success_rate=round((delivered / total * 100), 2) if total > 0 else 0.0,
+            failed=int(row.failed or 0),
+            pending=int(row.pending or 0),
+            delivering=int(row.delivering or 0),
+            dead=int(row.dead or 0),
+            success_rate=round((delivered / total_attempts * 100), 2) if total_attempts > 0 else 0.0,
         )
 
     async def mark_for_retry(
@@ -111,12 +122,41 @@ class DeliveryService:
         if not attempt:
             return None
         attempt.status = "pending"
-        attempt.attempt_number = 0
+        # Set to MAX_RETRY_ATTEMPTS - 1 so the worker gets exactly one more
+        # attempt before marking the row dead again. Resetting to 0 would
+        # silently restart the full retry cycle, bypassing the dead-letter guard.
+        from app.core.config import settings
+        attempt.attempt_number = settings.MAX_RETRY_ATTEMPTS - 1
         attempt.next_retry_at = None
         attempt.error_message = None
         attempt.response_code = None
+        attempt.response_body = None
         await db.flush()
         return attempt
+
+    async def recover_stuck_deliveries(self, db: AsyncSession) -> int:
+        """
+        Reset delivery attempts stuck in 'delivering' state for longer than
+        2x the delivery timeout. This handles Celery worker hard crashes.
+        Called on startup or via a periodic task.
+        """
+        from app.core.config import settings
+        stuck_threshold = datetime.utcnow() - timedelta(
+            seconds=settings.DELIVERY_TIMEOUT * 2
+        )
+        result = await db.execute(
+            select(DeliveryAttempt).where(
+                DeliveryAttempt.status == "delivering",
+                DeliveryAttempt.updated_at < stuck_threshold,
+            )
+        )
+        stuck = list(result.scalars().all())
+        for attempt in stuck:
+            attempt.status = "failed"
+            attempt.error_message = "Worker crashed or timed out — reset by recovery job"
+        if stuck:
+            await db.flush()
+        return len(stuck)
 
 
 delivery_service = DeliveryService()

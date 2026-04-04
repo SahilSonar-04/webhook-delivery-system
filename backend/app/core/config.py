@@ -5,24 +5,24 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db"
-    
+
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
-    
+
     # Security
     SECRET_KEY: str = "supersecretkey123"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
-    # Anthropic
+
+    # Groq — AI failure analysis
     GROQ_API_KEY: str = ""
-    
+
     # Webhook delivery settings
     MAX_RETRY_ATTEMPTS: int = 5
-    BASE_RETRY_DELAY: int = 30        # seconds
-    MAX_RETRY_DELAY: int = 7200       # 2 hours
-    DELIVERY_TIMEOUT: int = 30        # seconds
-    
+    BASE_RETRY_DELAY: int = 30        # seconds — delay before first retry
+    MAX_RETRY_DELAY: int = 7200       # 2 hours — cap on exponential backoff
+    DELIVERY_TIMEOUT: int = 30        # seconds — per HTTP request
+
     class Config:
         env_file = ".env"
 
