@@ -5,7 +5,7 @@ import hmac
 import json
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -123,7 +123,7 @@ async def attempt_delivery(attempt_id: str):
                 "event_type": event.event_type,
                 "payload": event.payload,
                 "attempt": attempt.attempt_number,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             payload_str = json.dumps(payload_dict)
             signature = sign_payload(payload_str, subscriber.secret)
@@ -156,7 +156,7 @@ async def attempt_delivery(attempt_id: str):
 
                 if response.status_code < 300:
                     attempt.status = "delivered"
-                    attempt.delivered_at = datetime.utcnow()
+                    attempt.delivered_at = datetime.now(timezone.utc)
                     logger.info(f"Delivered {attempt_id} → {response.status_code}")
 
                     await publish_event("delivery_success", {
@@ -207,7 +207,7 @@ async def attempt_delivery(attempt_id: str):
                     delay = calculate_retry_delay(attempt.attempt_number - 1)
                     _retry_delay = delay
                     attempt.status = "failed"
-                    attempt.next_retry_at = datetime.utcnow() + timedelta(seconds=delay)
+                    attempt.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
                     logger.info(f"Retry {attempt.attempt_number} in {delay}s")
 
                     await publish_event("delivery_failed", {

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from sqlalchemy.orm import selectinload
@@ -144,7 +144,7 @@ class DeliveryService:
         Called on startup or via a periodic task.
         """
         from app.core.config import settings
-        stuck_threshold = datetime.utcnow() - timedelta(
+        stuck_threshold = datetime.now(timezone.utc) - timedelta(
             seconds=settings.DELIVERY_TIMEOUT * 2
         )
         result = await db.execute(

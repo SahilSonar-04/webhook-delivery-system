@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import String, DateTime
+from datetime import datetime, timezone
+from sqlalchemy import String
+from sqlalchemy import DateTime as SaDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.db.database import Base
@@ -21,7 +22,7 @@ class Event(Base):
         String(255), unique=True, nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, index=True
+        SaDateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )
 
     # Relationships

@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import String, Boolean, DateTime, Text, ForeignKey
+from datetime import datetime, timezone
+from sqlalchemy import String, Boolean, Text, ForeignKey
+from sqlalchemy import DateTime as SaDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.database import Base
@@ -20,7 +21,7 @@ class Subscriber(Base):
     secret: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        SaDateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     subscriptions: Mapped[list["Subscription"]] = relationship(
@@ -46,7 +47,7 @@ class Subscription(Base):
     target_url: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        SaDateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     subscriber: Mapped["Subscriber"] = relationship(

@@ -1,8 +1,9 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import String, DateTime, Integer, Text, Float, ForeignKey
+from datetime import datetime, timezone
+from sqlalchemy import String, Integer, Text, Float, ForeignKey
+from sqlalchemy import DateTime as SaDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from app.db.database import Base
 
 
@@ -27,27 +28,28 @@ class DeliveryAttempt(Base):
         index=True
     )
 
-    # Status: pending, delivering, delivered, failed, dead
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="pending", index=True
     )
 
     attempt_number: Mapped[int] = mapped_column(Integer, default=0)
-    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(SaDateTime(timezone=True), nullable=True)
 
-    # Response details
     response_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     response_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(SaDateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        SaDateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        SaDateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     event: Mapped["Event"] = relationship(back_populates="delivery_attempts")
     subscription: Mapped["Subscription"] = relationship(
         back_populates="delivery_attempts"
@@ -77,9 +79,10 @@ class AIFailureAnalysis(Base):
     suggested_fix: Mapped[str] = mapped_column(Text, nullable=False)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        SaDateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
-    # Relationship
     delivery_attempt: Mapped["DeliveryAttempt"] = relationship(
         back_populates="ai_analysis"
     )
