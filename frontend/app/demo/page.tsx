@@ -48,6 +48,7 @@ interface Scenario {
   endpoint: string;
   eventType: string;
 }
+const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || "http://mock-subscriber:9000";
 
 const SCENARIOS: Scenario[] = [
   {
@@ -56,7 +57,7 @@ const SCENARIOS: Scenario[] = [
     tag: "Happy path",
     tagColor: "#10b981",
     desc: "Event accepted, HMAC-SHA256 signed, delivered on first attempt. Shows the X-Webhook-Signature header.",
-    endpoint: "http://mock-subscriber:9000/webhook",
+    endpoint: `${MOCK}/webhook`,
     eventType: "order.created",
   },
   {
@@ -65,7 +66,7 @@ const SCENARIOS: Scenario[] = [
     tag: "Retry",
     tagColor: "#f59e0b",
     desc: "Subscriber returns 500. Watch exponential backoff — next_retry_at advances with each failure.",
-    endpoint: "http://mock-subscriber:9000/webhook/fail",
+    endpoint: `${MOCK}/webhook/fail`,
     eventType: "payment.received",
   },
   {
@@ -74,7 +75,7 @@ const SCENARIOS: Scenario[] = [
     tag: "Dead letter",
     tagColor: "#ef4444",
     desc: "All 5 retries exhausted. Attempt lands in dead letter queue and Groq AI diagnoses the failure.",
-    endpoint: "http://mock-subscriber:9000/webhook/fail",
+    endpoint: `${MOCK}/webhook/fail`,
     eventType: "user.signup",
   },
   {
@@ -83,7 +84,7 @@ const SCENARIOS: Scenario[] = [
     tag: "Deduplication",
     tagColor: "#3b82f6",
     desc: "Fire twice with the same idempotency_key. Second call returns the identical event_id — no duplicate delivery.",
-    endpoint: "http://mock-subscriber:9000/webhook",
+    endpoint: `${MOCK}/webhook`,
     eventType: "invoice.paid",
   },
   {
@@ -92,7 +93,7 @@ const SCENARIOS: Scenario[] = [
     tag: "Edge case",
     tagColor: "#8b5cf6",
     desc: "Event ingested for an event_type no subscriber has registered. API accepts 202 but queued=0.",
-    endpoint: "http://mock-subscriber:9000/webhook",
+    endpoint: `${MOCK}/webhook`,
     eventType: "shipment.dispatched",
   },
   {
@@ -101,10 +102,11 @@ const SCENARIOS: Scenario[] = [
     tag: "Timeout",
     tagColor: "#f97316",
     desc: "Subscriber hangs for 60 s. Worker cuts the connection after 30 s and schedules exponential retry.",
-    endpoint: "http://mock-subscriber:9000/webhook/slow",
+    endpoint: `${MOCK}/webhook/slow`,
     eventType: "order.created",
   },
 ];
+ 
 
 const PAYLOADS: Record<string, Record<string, unknown>> = {
   "order.created":       { order_id: "ord_8f2k", amount: 129.00, currency: "USD", items: 3 },

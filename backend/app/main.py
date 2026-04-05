@@ -5,13 +5,12 @@ from app.api.v1.router import api_router
 from app.db.database import engine, Base
 import os
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # Shutdown: dispose engine connections
     await engine.dispose()
 
 
@@ -22,13 +21,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allows Next.js frontend to call this API
+# FRONTEND_URL accepts comma-separated values so you can whitelist
+# both your Vercel production URL and preview URLs without redeploying.
+# e.g. FRONTEND_URL=https://myapp.vercel.app,https://myapp-git-main-user.vercel.app
+_extra = [u.strip() for u in os.getenv("FRONTEND_URL", "").split(",") if u.strip()]
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    *_extra,
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        os.getenv("FRONTEND_URL", ""),
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -34,6 +34,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=supersecretkey123
       - GROQ_API_KEY=${GROQ_API_KEY}
+      # Allow the Next.js frontend running in Docker to call the API
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       db:
         condition: service_healthy
@@ -63,13 +65,17 @@ services:
     build: ./mock-subscriber
     ports:
       - "9000:9000"
-    
+
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Worker runs inside Docker so it resolves this hostname via Docker DNS.
+      # The browser only sends this string as target_url in API calls — it never
+      # fetches it directly — so the Docker-internal name is safe here.
+      - NEXT_PUBLIC_MOCK_URL=http://mock-subscriber:9000
     depends_on:
       - backend
     volumes:

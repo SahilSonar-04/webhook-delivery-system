@@ -1,0 +1,61 @@
+databases:
+  - name: wds-postgres
+    databaseName: webhook_db
+    user: webhook_user
+    plan: free
+
+services:
+  # ── Mock subscriber ──────────────────────────────────────────────────────
+  - type: web
+    name: wds-mock-subscriber
+    runtime: python
+    rootDir: mock-subscriber
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+
+  # ── FastAPI backend ──────────────────────────────────────────────────────
+  - type: web
+    name: wds-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wds-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false          # set manually in dashboard
+      - key: GROQ_API_KEY
+        sync: false          # set manually in dashboard
+      - key: FRONTEND_URL
+        sync: false          # set to your Vercel URL in dashboard
+      # REDIS_URL — set manually in dashboard after creating Upstash instance
+      - key: REDIS_URL
+        sync: false
+
+  # ── Celery worker ────────────────────────────────────────────────────────
+  - type: worker
+    name: wds-worker
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wds-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
