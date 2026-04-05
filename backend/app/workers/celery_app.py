@@ -17,8 +17,11 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    task_acks_late=True,        # task only removed from queue after completion
-    task_reject_on_worker_lost=True,  # requeue if worker crashes mid-task
-    worker_prefetch_multiplier=1,     # worker takes one task at a time
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    broker_use_ssl={
+        'ssl_cert_reqs': None
+    } if settings.REDIS_URL.startswith("rediss://") else None,
 )

@@ -28,7 +28,7 @@ def make_session() -> tuple:
     Returns (engine, session_factory) — caller must dispose the engine when done.
     """
     engine = create_async_engine(
-        settings.DATABASE_URL,
+        settings.async_database_url,
         echo=False,           # reduce noise in worker logs
         pool_size=1,          # single connection per task — no pool reuse issues
         max_overflow=0,
