@@ -20,9 +20,22 @@ async def ingest_event(
     Accept an event from a producer.
     Stores it, creates delivery attempts, queues async delivery.
     Returns 202 Accepted immediately — does not wait for delivery.
+
+    If idempotency_key has already been seen, no new delivery attempts
+    are created and no new Celery tasks are queued — the original
+    deliveries stand.
     """
-    # Create or get existing event (idempotency)
+    already_seen = await event_service.get_event_by_idempotency_key(
+        db, data.idempotency_key
+    )
     event = await event_service.create_event(db, data)
+
+    if already_seen:
+        return {
+            "event_id": str(event.id),
+            "message": "Event already processed for this idempotency_key. No new deliveries queued.",
+            "queued": 0,
+        }
 
     # Find all matching subscriptions
     subscriptions = await subscriber_service.get_matching_subscriptions(
@@ -30,15 +43,13 @@ async def ingest_event(
     )
 
     if not subscriptions:
+        await db.commit()
         return {
             "event_id": str(event.id),
             "message": "Event accepted. No active subscriptions found.",
             "queued": 0,
         }
 
-    # Create all delivery attempts and flush to get stable IDs.
-    # Celery tasks are enqueued after the flush so workers never race an
-    # uncommitted transaction. get_db commits the full transaction on exit.
     queued = 0
     attempt_ids: list[str] = []
     for subscription in subscriptions:
@@ -48,7 +59,10 @@ async def ingest_event(
         attempt_ids.append(str(attempt.id))
         queued += 1
 
-    await db.flush()
+    # Commit before dispatching so the Celery worker — running in a
+    # separate process/connection — can always see these rows, instead
+    # of racing an uncommitted transaction.
+    await db.commit()
 
     for attempt_id in attempt_ids:
         deliver_webhook.delay(attempt_id)

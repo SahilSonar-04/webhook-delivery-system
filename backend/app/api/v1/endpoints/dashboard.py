@@ -59,9 +59,10 @@ async def retry_delivery(
     attempt = await delivery_service.mark_for_retry(db, attempt_id)
     if not attempt:
         raise HTTPException(status_code=404, detail="Delivery attempt not found")
-    # Flush so the status update is visible; get_db commits on response exit.
-    # Celery task is queued after flush so the worker sees the updated row.
-    await db.flush()
+    # Commit before dispatching so the Celery worker — running in a
+    # separate process/connection — can always see the updated row,
+    # instead of racing an uncommitted transaction.
+    await db.commit()
     deliver_webhook.delay(str(attempt.id))
     return RetryResponse(
         message="Retry queued successfully",
@@ -94,7 +95,6 @@ async def stream_events(request: Request):
 
         try:
             while True:
-                # Check if client disconnected before doing any work
                 if await request.is_disconnected():
                     break
 
@@ -104,9 +104,6 @@ async def stream_events(request: Request):
                         timeout=1.0,
                     )
                 except Exception as e:
-                    # Redis connection dropped mid-stream. Yield an error event
-                    # so the client knows, then stop — the EventSource will
-                    # reconnect automatically, avoiding a tight spin-loop.
                     logger.error(f"SSE: Redis pubsub error: {e}")
                     yield f"data: {json.dumps({'type': 'error', 'message': 'stream interrupted'})}\n\n"
                     break
@@ -117,8 +114,6 @@ async def stream_events(request: Request):
                         data = data.decode()
                     yield f"data: {data}\n\n"
                 else:
-                    # Heartbeat keeps the connection alive and lets us detect
-                    # a closed socket on the next iteration
                     yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 
                 await asyncio.sleep(0.5)
