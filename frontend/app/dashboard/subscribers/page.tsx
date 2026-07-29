@@ -8,6 +8,7 @@ export default function SubscribersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [newSecret, setNewSecret] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -29,6 +30,7 @@ export default function SubscribersPage() {
     try {
       const result = await api.post("/api/v1/subscribers", { name, email });
       setNewApiKey(result.api_key);
+      setNewSecret(result.secret);
       setSubscribers((prev) => [result, ...prev]);
       setName("");
       setEmail("");
@@ -54,7 +56,7 @@ export default function SubscribersPage() {
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{subscribers.length} registered</span>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); setNewApiKey(null); setError(null); }}
+          onClick={() => { setShowForm(!showForm); setNewApiKey(null); setNewSecret(null); setError(null); }}
           className="btn btn-primary btn-sm"
         >
           {showForm ? "Cancel" : "+ Register Subscriber"}
@@ -121,13 +123,22 @@ export default function SubscribersPage() {
                   borderRadius: "var(--radius)",
                 }}>
                   <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--green)", marginBottom: 6, textTransform: "uppercase" }}>
-                    ✓ Subscriber Created — Save This API Key
+                    ✓ Subscriber Created — Save These, Shown Only Once
                   </div>
-                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3, textTransform: "uppercase" }}>
+                    API Key
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", wordBreak: "break-all", marginBottom: 8 }}>
                     {newApiKey}
                   </div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3, textTransform: "uppercase" }}>
+                    Signing Secret
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
+                    {newSecret}
+                  </div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 5 }}>
-                    This key will not be shown again.
+                    Use the signing secret to verify the X-Webhook-Signature header on incoming webhooks.
                   </div>
                 </div>
               )}

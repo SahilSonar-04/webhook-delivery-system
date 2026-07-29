@@ -15,6 +15,7 @@ class SubscriberResponse(BaseModel):
     name: str
     email: str
     api_key: str  # shown once on creation
+    secret: str  # shown once on creation — used to verify X-Webhook-Signature
     is_active: bool
     created_at: datetime
 
