@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
-from app.services.delivery_service import delivery_service
+from app.services.delivery_service import delivery_service, DeliveryRetryError
 from app.schemas.delivery import (
     DeliveryAttemptResponse,
     DashboardStats,
@@ -56,12 +56,14 @@ async def retry_delivery(
     db: AsyncSession = Depends(get_db),
 ):
     """Manually retry a failed or dead delivery."""
-    attempt = await delivery_service.mark_for_retry(db, attempt_id)
+    try:
+        attempt = await delivery_service.mark_for_retry(db, attempt_id)
+    except DeliveryRetryError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
     if not attempt:
         raise HTTPException(status_code=404, detail="Delivery attempt not found")
-    # Commit before dispatching so the Celery worker — running in a
-    # separate process/connection — can always see the updated row,
-    # instead of racing an uncommitted transaction.
+
     await db.commit()
     deliver_webhook.delay(str(attempt.id))
     return RetryResponse(

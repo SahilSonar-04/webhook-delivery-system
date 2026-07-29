@@ -8,6 +8,10 @@ from app.models.event import Event
 from app.schemas.delivery import DashboardStats
 
 
+class DeliveryRetryError(Exception):
+    pass
+
+
 class DeliveryService:
 
     async def create_delivery_attempt(
@@ -81,13 +85,11 @@ class DeliveryService:
     async def get_dashboard_stats(
         self, db: AsyncSession
     ) -> DashboardStats:
-        # Count actual unique events (not delivery attempts)
         event_count_result = await db.execute(
             select(func.count(Event.id))
         )
         total_events = event_count_result.scalar() or 0
 
-        # Count delivery attempts by status
         attempts_result = await db.execute(
             select(
                 func.count(DeliveryAttempt.id).label("total_attempts"),
@@ -121,15 +123,18 @@ class DeliveryService:
         attempt = await self.get_delivery_attempt(db, attempt_id)
         if not attempt:
             return None
+
+        if attempt.status not in ("failed", "dead"):
+            raise DeliveryRetryError(
+                f"Cannot retry attempt in status '{attempt.status}'; "
+                f"only 'failed' or 'dead' attempts can be retried"
+            )
+
+        if attempt.ai_analysis:
+            await db.delete(attempt.ai_analysis)
+
         attempt.status = "pending"
-        # Set to MAX_RETRY_ATTEMPTS - 2 so that after the worker increments
-        # attempt_number by 1, it becomes MAX_RETRY_ATTEMPTS - 1, which is
-        # still below the dead-letter threshold and delivery is actually
-        # attempted. The previous value (MAX_RETRY_ATTEMPTS - 1) caused the
-        # worker to increment to MAX_RETRY_ATTEMPTS, immediately hit the >=
-        # check, and mark the attempt dead without ever sending the request.
-        from app.core.config import settings
-        attempt.attempt_number = settings.MAX_RETRY_ATTEMPTS - 2
+        attempt.attempt_number = 0
         attempt.next_retry_at = None
         attempt.error_message = None
         attempt.response_code = None
