@@ -8,7 +8,6 @@ from app.schemas.subscriber import (
 from app.schemas.event import EventCreate, EventResponse
 from app.schemas.delivery import (
     DeliveryAttemptResponse,
-    DeliveryAttemptDetail,
     AIAnalysisResponse,
     DashboardStats,
     RetryResponse,
@@ -23,7 +22,6 @@ __all__ = [
     "EventCreate",
     "EventResponse",
     "DeliveryAttemptResponse",
-    "DeliveryAttemptDetail",
     "AIAnalysisResponse",
     "DashboardStats",
     "RetryResponse",

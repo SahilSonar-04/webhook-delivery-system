@@ -43,12 +43,6 @@ class DeliveryAttemptResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class DeliveryAttemptDetail(DeliveryAttemptResponse):
-    event: Optional[dict] = None
-
-    model_config = {"from_attributes": True}
-
-
 class DashboardStats(BaseModel):
     # Unique ingested events
     total_events: int
