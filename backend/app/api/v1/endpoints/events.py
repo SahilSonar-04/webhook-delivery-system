@@ -29,12 +29,9 @@ async def ingest_event(
     are created and no new Celery tasks are queued — the original
     deliveries stand.
     """
-    already_seen = await event_service.get_event_by_idempotency_key(
-        db, data.idempotency_key
-    )
-    event = await event_service.create_event(db, data)
+    event, was_created = await event_service.create_event(db, data)
 
-    if already_seen:
+    if not was_created:
         return {
             "event_id": str(event.id),
             "message": "Event already processed for this idempotency_key. No new deliveries queued.",

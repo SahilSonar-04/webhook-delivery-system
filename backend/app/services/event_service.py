@@ -20,10 +20,10 @@ class EventService:
 
     async def create_event(
         self, db: AsyncSession, data: EventCreate
-    ) -> Event:
+    ) -> tuple[Event, bool]:
         existing = await self.get_event_by_idempotency_key(db, data.idempotency_key)
         if existing:
-            return existing
+            return existing, False
 
         event = Event(
             id=uuid.uuid4(),
@@ -39,9 +39,9 @@ class EventService:
             await db.rollback()
             existing = await self.get_event_by_idempotency_key(db, data.idempotency_key)
             if existing:
-                return existing
+                return existing, False
             raise
-        return event
+        return event, True
 
     async def get_event(
         self, db: AsyncSession, event_id: uuid.UUID

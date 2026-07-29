@@ -74,7 +74,7 @@ async def test_get_matching_subscriptions(db_session: AsyncSession):
 # ── Event Service ───────────────────────────────────────────────
 
 async def test_event_service_create(db_session: AsyncSession):
-    event = await event_service.create_event(
+    event, was_created = await event_service.create_event(
         db_session,
         EventCreate(
             event_type="order.created",
@@ -85,6 +85,7 @@ async def test_event_service_create(db_session: AsyncSession):
     )
     assert event.event_type == "order.created"
     assert event.idempotency_key == "evt-001"
+    assert was_created is True
 
 
 async def test_event_service_idempotency(db_session: AsyncSession):
@@ -94,13 +95,15 @@ async def test_event_service_idempotency(db_session: AsyncSession):
         producer_id="shop",
         idempotency_key="evt-idem",
     )
-    e1 = await event_service.create_event(db_session, data)
-    e2 = await event_service.create_event(db_session, data)
+    e1, created1 = await event_service.create_event(db_session, data)
+    e2, created2 = await event_service.create_event(db_session, data)
     assert e1.id == e2.id
+    assert created1 is True
+    assert created2 is False
 
 
 async def test_event_service_get(db_session: AsyncSession):
-    event = await event_service.create_event(
+    event, _ = await event_service.create_event(
         db_session,
         EventCreate(
             event_type="test",

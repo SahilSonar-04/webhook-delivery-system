@@ -27,7 +27,7 @@ async def test_attempt_delivery_success(db_session, engine):
         db_session, sub.id,
         SubscriptionCreate(event_type="ship", target_url="http://mock/hook"),
     )
-    event = await event_service.create_event(
+    event, _ = await event_service.create_event(
         db_session,
         EventCreate(event_type="ship", payload={}, producer_id="p", idempotency_key="adv-001"),
     )
@@ -83,7 +83,7 @@ async def test_attempt_delivery_failure_schedules_retry(db_session, engine):
         db_session, sub.id,
         SubscriptionCreate(event_type="fail.test", target_url="http://mock/fail"),
     )
-    event = await event_service.create_event(
+    event, _ = await event_service.create_event(
         db_session,
         EventCreate(event_type="fail.test", payload={}, producer_id="p", idempotency_key="adv-002"),
     )
