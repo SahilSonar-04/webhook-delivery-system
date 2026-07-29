@@ -270,7 +270,7 @@ export default function DemoPage() {
     try {
       const res  = await fetch(`${API}/api/v1/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-api-key": subscriber.api_key },
         body: JSON.stringify({ event_type: sc.eventType, payload, producer_id: "wds-demo", idempotency_key: key }),
       });
       const data = await res.json();
@@ -610,6 +610,7 @@ export default function DemoPage() {
               <pre style={{ ...s.pre, fontSize: 10 }}>
 {`curl -X POST ${API}/api/v1/events \\
   -H "Content-Type: application/json" \\
+  -H "x-api-key: ${subscriber.api_key}" \\
   -d '{
     "event_type": "${scenario.eventType}",
     "payload": ${JSON.stringify(PAYLOADS[scenario.eventType] ?? {})},
