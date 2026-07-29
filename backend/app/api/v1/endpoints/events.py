@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.services.event_service import event_service
@@ -6,6 +6,8 @@ from app.services.subscriber_service import subscriber_service
 from app.services.delivery_service import delivery_service
 from app.schemas.event import EventCreate, EventResponse
 from app.workers.delivery_worker import deliver_webhook
+from app.core.security import verify_api_key
+from app.models.subscriber import Subscriber
 import uuid
 
 router = APIRouter()
@@ -15,10 +17,12 @@ router = APIRouter()
 async def ingest_event(
     data: EventCreate,
     db: AsyncSession = Depends(get_db),
+    producer: Subscriber = Depends(verify_api_key),
 ):
     """
     Accept an event from a producer.
-    Stores it, creates delivery attempts, queues async delivery.
+    Requires a valid x-api-key from a registered subscriber.
+    Stores the event, creates delivery attempts, queues async delivery.
     Returns 202 Accepted immediately — does not wait for delivery.
 
     If idempotency_key has already been seen, no new delivery attempts
@@ -37,7 +41,6 @@ async def ingest_event(
             "queued": 0,
         }
 
-    # Find all matching subscriptions
     subscriptions = await subscriber_service.get_matching_subscriptions(
         db, data.event_type
     )
@@ -59,9 +62,6 @@ async def ingest_event(
         attempt_ids.append(str(attempt.id))
         queued += 1
 
-    # Commit before dispatching so the Celery worker — running in a
-    # separate process/connection — can always see these rows, instead
-    # of racing an uncommitted transaction.
     await db.commit()
 
     for attempt_id in attempt_ids:
@@ -76,8 +76,8 @@ async def ingest_event(
 
 @router.get("", response_model=list[EventResponse])
 async def list_events(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     return await event_service.get_all_events(db, skip=skip, limit=limit)

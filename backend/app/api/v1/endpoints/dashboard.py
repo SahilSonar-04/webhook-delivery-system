@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
@@ -29,8 +29,8 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 @router.get("/delivery-attempts", response_model=list[DeliveryAttemptResponse])
 async def list_delivery_attempts(
     status: str | None = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     """List all delivery attempts with optional status filter."""
