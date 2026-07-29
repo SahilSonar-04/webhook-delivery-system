@@ -32,6 +32,31 @@ async def test_ingest_event_idempotency(client: AsyncClient):
     assert r1.json()["event_id"] == r2.json()["event_id"]
 
 
+async def test_ingest_event_idempotency_does_not_requeue(client: AsyncClient):
+    sub_resp = await client.post("/api/v1/subscribers", json={
+        "name": "IdemSub", "email": "idem@example.com"
+    })
+    sub_data = sub_resp.json()
+    await client.post(
+        f"/api/v1/subscribers/{sub_data['id']}/subscriptions",
+        json={"event_type": "order.created", "target_url": "http://mock/hook"},
+        headers={"x-api-key": sub_data["api_key"]},
+    )
+    payload = {
+        "event_type": "order.created",
+        "payload": {"order_id": 1},
+        "producer_id": "shop",
+        "idempotency_key": "idem-requeue-001"
+    }
+    r1 = await client.post("/api/v1/events", json=payload)
+    r2 = await client.post("/api/v1/events", json=payload)
+
+    assert r1.json()["queued"] == 1
+    assert r2.json()["queued"] == 0
+
+    attempts = (await client.get("/api/v1/dashboard/delivery-attempts")).json()
+    assert len(attempts) == 1
+
 async def test_ingest_event_queues_for_subscribers(client: AsyncClient):
     # Register a subscriber + subscription first
     sub_resp = await client.post("/api/v1/subscribers", json={
