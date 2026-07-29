@@ -17,13 +17,17 @@ async def _create_subscriber_with_subscription(client, email, event_type, target
     return sub_data
 
 
-async def _ingest_event(client, event_type, idempotency_key):
-    return await client.post("/api/v1/events", json={
-        "event_type": event_type,
-        "payload": {"test": True},
-        "producer_id": "test-producer",
-        "idempotency_key": idempotency_key,
-    })
+async def _ingest_event(client, api_key, event_type, idempotency_key):
+    return await client.post(
+        "/api/v1/events",
+        json={
+            "event_type": event_type,
+            "payload": {"test": True},
+            "producer_id": "test-producer",
+            "idempotency_key": idempotency_key,
+        },
+        headers={"x-api-key": api_key},
+    )
 
 
 async def test_list_delivery_attempts_empty(client: AsyncClient):
@@ -36,10 +40,10 @@ async def test_delivery_attempt_created_on_event(client: AsyncClient):
     with patch("app.api.v1.endpoints.events.deliver_webhook") as mock_task:
         mock_task.delay = lambda *a, **kw: None
 
-        await _create_subscriber_with_subscription(
+        sub_data = await _create_subscriber_with_subscription(
             client, "d1@test.com", "user.signup", "http://mock/hook"
         )
-        await _ingest_event(client, "user.signup", "delivery-test-001")
+        await _ingest_event(client, sub_data["api_key"], "user.signup", "delivery-test-001")
 
     response = await client.get("/api/v1/dashboard/delivery-attempts")
     assert response.status_code == 200
@@ -52,10 +56,10 @@ async def test_get_delivery_attempt_by_id(client: AsyncClient):
     with patch("app.api.v1.endpoints.events.deliver_webhook") as mock_task:
         mock_task.delay = lambda *a, **kw: None
 
-        await _create_subscriber_with_subscription(
+        sub_data = await _create_subscriber_with_subscription(
             client, "d2@test.com", "user.signup", "http://mock/hook"
         )
-        await _ingest_event(client, "user.signup", "delivery-test-002")
+        await _ingest_event(client, sub_data["api_key"], "user.signup", "delivery-test-002")
 
     attempts = (await client.get("/api/v1/dashboard/delivery-attempts")).json()
     attempt_id = attempts[0]["id"]
@@ -75,10 +79,10 @@ async def test_filter_attempts_by_status(client: AsyncClient):
     with patch("app.api.v1.endpoints.events.deliver_webhook") as mock_task:
         mock_task.delay = lambda *a, **kw: None
 
-        await _create_subscriber_with_subscription(
+        sub_data = await _create_subscriber_with_subscription(
             client, "d3@test.com", "order.paid", "http://mock/hook"
         )
-        await _ingest_event(client, "order.paid", "delivery-test-003")
+        await _ingest_event(client, sub_data["api_key"], "order.paid", "delivery-test-003")
 
     pending = (await client.get("/api/v1/dashboard/delivery-attempts?status=pending")).json()
     delivered = (await client.get("/api/v1/dashboard/delivery-attempts?status=delivered")).json()

@@ -20,7 +20,11 @@ async def test_dashboard_stats_after_events(client: AsyncClient):
     with patch("app.api.v1.endpoints.events.deliver_webhook") as mock_task:
         mock_task.delay = lambda *a, **kw: None
 
-        # Create subscriber + subscription
+        producer_resp = await client.post("/api/v1/subscribers", json={
+            "name": "Producer", "email": "stats-producer@test.com"
+        })
+        producer = producer_resp.json()
+
         sub_resp = await client.post("/api/v1/subscribers", json={
             "name": "Stats Test", "email": "stats@test.com"
         })
@@ -31,14 +35,17 @@ async def test_dashboard_stats_after_events(client: AsyncClient):
             headers={"x-api-key": sub_data["api_key"]},
         )
 
-        # Ingest 2 events
         for i in range(2):
-            await client.post("/api/v1/events", json={
-                "event_type": "test.event",
-                "payload": {},
-                "producer_id": "p",
-                "idempotency_key": f"stats-key-{i}"
-            })
+            await client.post(
+                "/api/v1/events",
+                json={
+                    "event_type": "test.event",
+                    "payload": {},
+                    "producer_id": "p",
+                    "idempotency_key": f"stats-key-{i}"
+                },
+                headers={"x-api-key": producer["api_key"]},
+            )
 
     stats = (await client.get("/api/v1/dashboard/stats")).json()
     assert stats["total_events"] == 2
