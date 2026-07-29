@@ -110,7 +110,7 @@ GET    /api/v1/subscribers/{id}/subscriptions       List subscriber's subscripti
 ### Events
 
 ```
-POST   /api/v1/events                               Ingest event → 202 Accepted
+POST   /api/v1/events                               Ingest event → 202 Accepted[auth: x-api-key]
 GET    /api/v1/events                               List events
 GET    /api/v1/events/{id}                          Get single event
 ```
