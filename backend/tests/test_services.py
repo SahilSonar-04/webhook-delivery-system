@@ -155,8 +155,12 @@ async def test_delivery_service_mark_for_retry(db_session: AsyncSession):
     attempt = await delivery_service.create_delivery_attempt(
         db_session, event.id, subscription.id
     )
+    attempt.status = "failed"
+    await db_session.flush()
+
     updated = await delivery_service.mark_for_retry(db_session, attempt.id)
     assert updated.status == "pending"
+    assert updated.attempt_number == 0
     assert updated.next_retry_at is None
 
 
