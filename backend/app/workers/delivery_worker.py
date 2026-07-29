@@ -170,14 +170,8 @@ async def attempt_delivery(attempt_id: str):
                     raise Exception(f"Non-2xx response: {response.status_code}")
 
             except Exception as e:
-                # Only recalculate duration if it wasn't already set above
-                # (i.e. the exception came from the HTTP call itself, not from
-                # the non-2xx branch which already captured it).
-                if attempt.duration_ms is None:
-                    attempt.duration_ms = (time.time() - start_time) * 1000
+                attempt.duration_ms = (time.time() - start_time) * 1000
 
-                # Build error message that includes previous attempt context so
-                # the audit trail isn't silently overwritten on each retry.
                 current_error = str(e)[:400]
                 if prev_error and prev_response_code:
                     history_note = f"[prev attempt #{attempt.attempt_number - 1}: {prev_response_code} — {prev_error[:80]}] "

@@ -139,6 +139,7 @@ class DeliveryService:
         attempt.error_message = None
         attempt.response_code = None
         attempt.response_body = None
+        attempt.duration_ms = None
         await db.flush()
         return attempt
 
