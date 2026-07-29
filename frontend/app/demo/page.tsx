@@ -103,7 +103,7 @@ const SCENARIOS: Scenario[] = [
     tagColor: "#f97316",
     desc: "Subscriber hangs for 60 s. Worker cuts the connection after 30 s and schedules exponential retry.",
     endpoint: `${MOCK}/webhook/slow`,
-    eventType: "order.created",
+    eventType: "order.delayed",
   },
 ];
  
@@ -114,6 +114,7 @@ const PAYLOADS: Record<string, Record<string, unknown>> = {
   "user.signup":         { user_id: "usr_7jd2", email: "alex@example.com", plan: "pro" },
   "invoice.paid":        { invoice_id: "inv_5mx1", total: 299.00, due_date: "2026-04-30" },
   "shipment.dispatched": { shipment_id: "shp_2pq8", carrier: "DHL", eta: "2026-04-08" },
+  "order.delayed":       { order_id: "ord_9k3p", reason: "carrier_delay", eta: "2026-04-12" },
 };
 
 const STATUS_COLORS: Record<DeliveryStatus, string> = {
