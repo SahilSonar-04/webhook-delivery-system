@@ -2,6 +2,7 @@ import uuid
 import secrets
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from app.models.subscriber import Subscriber, Subscription
 from app.schemas.subscriber import SubscriberCreate, SubscriptionCreate
 
@@ -19,7 +20,6 @@ class SubscriberService:
     async def create_subscriber(
         self, db: AsyncSession, data: SubscriberCreate
     ) -> Subscriber:
-        # Check if email already exists
         result = await db.execute(
             select(Subscriber).where(Subscriber.email == data.email)
         )
@@ -35,7 +35,11 @@ class SubscriberService:
             secret=generate_secret(),
         )
         db.add(subscriber)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise ValueError(f"Subscriber with email {data.email} already exists")
         return subscriber
 
     async def get_subscriber_by_api_key(

@@ -1,8 +1,8 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from app.models.event import Event
-from app.models.delivery import DeliveryAttempt
 from app.schemas.event import EventCreate
 
 
@@ -21,7 +21,6 @@ class EventService:
     async def create_event(
         self, db: AsyncSession, data: EventCreate
     ) -> Event:
-        # Idempotency check — if same key seen before, return existing event
         existing = await self.get_event_by_idempotency_key(db, data.idempotency_key)
         if existing:
             return existing
@@ -34,7 +33,14 @@ class EventService:
             idempotency_key=data.idempotency_key,
         )
         db.add(event)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            existing = await self.get_event_by_idempotency_key(db, data.idempotency_key)
+            if existing:
+                return existing
+            raise
         return event
 
     async def get_event(
