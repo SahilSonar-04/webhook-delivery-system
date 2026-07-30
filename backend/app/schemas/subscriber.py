@@ -36,7 +36,7 @@ class SubscriberPublic(BaseModel):
 
 class SubscriptionCreate(BaseModel):
     event_type: str
-    target_url: str
+    target_url: HttpUrl
 
 
 class SubscriptionResponse(BaseModel):

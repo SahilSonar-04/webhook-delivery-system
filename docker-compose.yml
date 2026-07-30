@@ -32,7 +32,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=supersecretkey123
       - GROQ_API_KEY=${GROQ_API_KEY}
       - FRONTEND_URL=http://localhost:3000
       - RUN_EMBEDDED_WORKER=false
@@ -50,7 +49,6 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=supersecretkey123
       - GROQ_API_KEY=${GROQ_API_KEY}
     depends_on:
       db:

@@ -18,11 +18,6 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
 
-    # Security
-    SECRET_KEY: str = "supersecretkey123"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-
     # Groq — AI failure analysis
     GROQ_API_KEY: str = ""
 

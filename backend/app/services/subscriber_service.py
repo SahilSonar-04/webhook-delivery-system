@@ -71,7 +71,7 @@ class SubscriberService:
             id=uuid.uuid4(),
             subscriber_id=subscriber_id,
             event_type=data.event_type,
-            target_url=data.target_url,
+            target_url=str(data.target_url),
         )
         db.add(subscription)
         await db.flush()
