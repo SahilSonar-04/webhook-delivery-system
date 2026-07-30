@@ -67,6 +67,22 @@ class SubscriberService:
         subscriber_id: uuid.UUID,
         data: SubscriptionCreate
     ) -> Subscription:
+        result = await db.execute(
+            select(Subscription)
+            .where(
+                Subscription.subscriber_id == subscriber_id,
+                Subscription.event_type == data.event_type,
+                Subscription.is_active == True,
+            )
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.target_url = str(data.target_url)
+            await db.flush()
+            return existing
+
         subscription = Subscription(
             id=uuid.uuid4(),
             subscriber_id=subscriber_id,
