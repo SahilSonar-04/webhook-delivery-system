@@ -2,6 +2,11 @@
 
 An async webhook delivery engine built with FastAPI, Celery, PostgreSQL, Redis, and Next.js, with AI-assisted failure analysis via Groq.
 
+**Live demo:** [webhook-delivery-system.vercel.app/demo](https://webhook-delivery-system.vercel.app/demo)
+**Dashboard:** [webhook-delivery-system.vercel.app/dashboard](https://webhook-delivery-system.vercel.app/dashboard)
+
+> Deployed on Render's free tier — the backend can take 30–60s to respond on the first request after a period of inactivity. See [Deployment](#deployment) below.
+
 ---
 
 ## Overview
@@ -57,7 +62,7 @@ A fan-out system that accepts events from producers, matches them against subscr
 | HTTP Client | httpx (async) |
 | AI Analysis | Groq API — Llama 3.1 8B |
 | Containerization | Docker + Docker Compose |
-| Deployment | Render |
+| Deployment | Render (API, worker, Postgres, Redis) + Vercel (frontend) |
 
 ---
 
@@ -164,6 +169,12 @@ docker compose exec backend pytest
 
 ---
 
+## Deployment
+
+The backend, worker, database, and Redis all deploy together via a Render Blueprint (`render.yaml`). The frontend deploys separately to Vercel.
+
+---
+
 ## Demo
 
 The frontend includes an interactive `/demo` page that walks through every scenario without manual setup:
@@ -212,11 +223,14 @@ The frontend includes an interactive `/demo` page that walks through every scena
 
 ## Environment Variables
 
+### Backend
+
 ```env
-# Local Docker Compose only needs GROQ_API_KEY (see above).
+# Local Docker Compose only needs GROQ_API_KEY (see above)
 # The rest are hardcoded in docker-compose.yml for local dev.
 # This full list is what the backend container receives regardless of
 # how it's run — reference it when deploying (e.g. Render env vars).
+
 DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/webhook_db
 REDIS_URL=redis://redis:6379/0
 GROQ_API_KEY=your-groq-key          # optional
@@ -227,6 +241,13 @@ MAX_RETRY_ATTEMPTS=5
 BASE_RETRY_DELAY=30
 MAX_RETRY_DELAY=7200
 DELIVERY_TIMEOUT=30
+```
+
+### Frontend (build-time)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000    # or your deployed backend URL
+NEXT_PUBLIC_MOCK_URL=http://localhost:9000   # or your deployed mock-subscriber URL
 ```
 
 ---
