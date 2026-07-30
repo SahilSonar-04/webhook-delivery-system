@@ -132,7 +132,7 @@ async def test_delivery_service_create_attempt(db_session: AsyncSession):
         db_session, sub.id,
         SubscriptionCreate(event_type="x", target_url="http://x.com"),
     )
-    event = await event_service.create_event(
+    event, _ = await event_service.create_event(
         db_session,
         EventCreate(event_type="x", payload={}, producer_id="p", idempotency_key="da-001"),
     )
@@ -151,7 +151,7 @@ async def test_delivery_service_mark_for_retry(db_session: AsyncSession):
         db_session, sub.id,
         SubscriptionCreate(event_type="y", target_url="http://y.com"),
     )
-    event = await event_service.create_event(
+    event, _ = await event_service.create_event(
         db_session,
         EventCreate(event_type="y", payload={}, producer_id="p", idempotency_key="retry-001"),
     )
