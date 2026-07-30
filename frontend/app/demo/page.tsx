@@ -177,23 +177,41 @@ export default function DemoPage() {
 
   // ── provision ──────────────────────────────────────────────────────────
 
+  const DEMO_STORAGE_KEY = "wds-demo-subscriber";
+
   const provision = useCallback(async () => {
     setSetupStatus("provisioning");
     addLog("Provisioning demo session...", "sys");
     try {
-      const tag   = Math.random().toString(36).slice(2, 7);
-      const email = `demo-${tag}@wds-demo.dev`;
+      let sub: Subscriber | null = null;
+      const stored = localStorage.getItem(DEMO_STORAGE_KEY);
+      if (stored) {
+        try {
+          sub = JSON.parse(stored);
+          addLog(`Reusing existing demo subscriber  id=${sub!.id.slice(0, 8)}...`, "ok");
+        } catch {
+          sub = null;
+        }
+      }
 
-      addLog(`POST /api/v1/subscribers  email=${email}`, "info");
-      const subRes = await fetch(`${API}/api/v1/subscribers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `Demo ${tag}`, email }),
-      });
-      if (!subRes.ok) throw new Error(`${subRes.status} ${await subRes.text()}`);
-      const sub = await subRes.json();
-      setSubscriber({ id: sub.id, api_key: sub.api_key, name: sub.name });
-      addLog(`Subscriber created  id=${sub.id.slice(0, 8)}...  key=${sub.api_key.slice(0, 16)}...`, "ok");
+      if (!sub) {
+        const tag   = Math.random().toString(36).slice(2, 7);
+        const email = `demo-${tag}@wds-demo.dev`;
+
+        addLog(`POST /api/v1/subscribers  email=${email}`, "info");
+        const subRes = await fetch(`${API}/api/v1/subscribers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `Demo ${tag}`, email }),
+        });
+        if (!subRes.ok) throw new Error(`${subRes.status} ${await subRes.text()}`);
+        const created = await subRes.json();
+        sub = { id: created.id, api_key: created.api_key, name: created.name };
+        localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(sub));
+        addLog(`Subscriber created  id=${sub.id.slice(0, 8)}...  key=${sub.api_key.slice(0, 16)}...`, "ok");
+      }
+
+      setSubscriber(sub);
 
       const sc = SCENARIOS[0];
       addLog(`POST .../subscriptions  event_type=${sc.eventType}`, "info");
@@ -202,7 +220,15 @@ export default function DemoPage() {
         headers: { "Content-Type": "application/json", "x-api-key": sub.api_key },
         body: JSON.stringify({ event_type: sc.eventType, target_url: sc.endpoint }),
       });
-      if (!scrRes.ok) throw new Error(`subscription: ${scrRes.status}`);
+      if (!scrRes.ok) {
+        if (scrRes.status === 401) {
+          localStorage.removeItem(DEMO_STORAGE_KEY);
+          addLog("Stored demo subscriber is no longer valid — clearing and retrying", "warn");
+          setSetupStatus("idle");
+          return provision();
+        }
+        throw new Error(`subscription: ${scrRes.status}`);
+      }
       const scr = await scrRes.json();
       setSubscription(scr);
       addLog(`Subscription active  id=${scr.id.slice(0, 8)}...`, "ok");
