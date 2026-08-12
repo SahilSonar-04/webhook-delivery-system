@@ -3,31 +3,38 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://webhook_user:webhook_pass@db:5432/webhook_db"
+    ENVIRONMENT: str
+    DATABASE_URL: str
 
+    #Required for render deployment  
     @property
     def async_database_url(self) -> str:
         url = self.DATABASE_URL
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        if url.startswith("postgres://"):
+        elif url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         return url
-        
-    # Redis
-    REDIS_URL: str = "redis://redis:6379/0"
 
-    # Groq — AI failure analysis
-    GROQ_API_KEY: str = ""
+    REDIS_URL: str
+    SECRET_KEY: str
+    GROQ_API_KEY: str
+    FRONTEND_URL: str = ""
 
-    # Webhook delivery settings
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = ["http://localhost:3000"] if self.ENVIRONMENT == "development" else []
+        if self.FRONTEND_URL:
+            origins.append(self.FRONTEND_URL)
+        return origins
+
+    # Webhook Delivery Settings
     MAX_RETRY_ATTEMPTS: int = 5
     BASE_RETRY_DELAY: int = 30        # seconds — delay before first retry
     MAX_RETRY_DELAY: int = 7200       # 2 hours — cap on exponential backoff
     DELIVERY_TIMEOUT: int = 30        # seconds — per HTTP request
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict()
 
 
 @lru_cache()

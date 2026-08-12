@@ -5,12 +5,15 @@ databases:
     plan: free
 
 services:
+
+  # ── Redis ────────────────────────────────────────────────
   - type: keyvalue
     name: wds-redis
     plan: free
     ipAllowList: []
     maxmemoryPolicy: noeviction
 
+  # ── Mock Subscriber ──────────────────────────────────────
   - type: web
     name: wds-mock-subscriber
     runtime: python
@@ -19,10 +22,12 @@ services:
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     plan: free
     healthCheckPath: /health
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.0
 
+  # ── Backend ──────────────────────────────────────────────
   - type: web
     name: wds-backend
     runtime: python
@@ -31,21 +36,40 @@ services:
     startCommand: bash start.sh
     plan: free
     healthCheckPath: /health
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.0
+
+      # Application environment
+      - key: ENVIRONMENT
+        value: production
+
+      # Embedded Celery worker
       - key: RUN_EMBEDDED_WORKER
         value: "true"
+
+      # PostgreSQL
       - key: DATABASE_URL
         fromDatabase:
           name: wds-postgres
           property: connectionString
+
+      # Redis
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: wds-redis
           property: connectionString
+
+      # Application secret
+      - key: SECRET_KEY
+        sync: false
+
+      # Groq API key
       - key: GROQ_API_KEY
         sync: false
+
+      # Frontend URL
       - key: FRONTEND_URL
         sync: false
