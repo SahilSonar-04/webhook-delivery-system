@@ -64,7 +64,7 @@ services:
 
       # Application secret
       - key: SECRET_KEY
-        sync: false
+        generateValue: true
 
       # Groq API key
       - key: GROQ_API_KEY
