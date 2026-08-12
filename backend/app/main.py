@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
-from app.db.database import engine, Base, AsyncSessionLocal
+from app.db.base import Base
+from app.db.database import engine, AsyncSessionLocal
 from app.services.delivery_service import delivery_service
 import logging
 
