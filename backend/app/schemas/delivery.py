@@ -44,16 +44,13 @@ class DeliveryAttemptResponse(BaseModel):
 
 
 class DashboardStats(BaseModel):
-    # Unique ingested events
     total_events: int
-    # Delivery attempt breakdown
     total_attempts: int
     delivered: int
     failed: int
     pending: int
     delivering: int
     dead: int
-    # Success rate based on attempts
     success_rate: float
 
 

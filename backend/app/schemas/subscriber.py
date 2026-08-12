@@ -3,8 +3,6 @@ from uuid import UUID
 from datetime import datetime
 
 
-# --- Subscriber Schemas ---
-
 class SubscriberCreate(BaseModel):
     name: str
     email: EmailStr
@@ -31,8 +29,6 @@ class SubscriberPublic(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# --- Subscription Schemas ---
 
 class SubscriptionCreate(BaseModel):
     event_type: str
