@@ -40,7 +40,7 @@ class Subscription(Base):
     )
     subscriber_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("subscribers.id"),  # this was missing
+        ForeignKey("subscribers.id"),  
         nullable=False
     )
     event_type: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
