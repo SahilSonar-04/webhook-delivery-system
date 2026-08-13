@@ -1,3 +1,4 @@
+from app.schemas.producer import ProducerCreate, ProducerResponse, ProducerPublic
 from app.schemas.subscriber import (
     SubscriberCreate,
     SubscriberResponse,
@@ -14,6 +15,9 @@ from app.schemas.delivery import (
 )
 
 __all__ = [
+    "ProducerCreate",
+    "ProducerResponse",
+    "ProducerPublic",
     "SubscriberCreate",
     "SubscriberResponse",
     "SubscriberPublic",
