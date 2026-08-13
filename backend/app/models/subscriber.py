@@ -43,6 +43,11 @@ class Subscription(Base):
         ForeignKey("subscribers.id"),  
         nullable=False
     )
+    producer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("producers.id"),
+        nullable=True,
+    )
     event_type: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     target_url: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -1,7 +1,7 @@
 import uuid
 import secrets
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from app.models.subscriber import Subscriber, Subscription
 from app.schemas.subscriber import SubscriberCreate, SubscriptionCreate
@@ -72,6 +72,7 @@ class SubscriberService:
             .where(
                 Subscription.subscriber_id == subscriber_id,
                 Subscription.event_type == data.event_type,
+                Subscription.producer_id == data.producer_id,
                 Subscription.is_active == True,
             )
             .order_by(Subscription.created_at.desc())
@@ -86,6 +87,7 @@ class SubscriberService:
         subscription = Subscription(
             id=uuid.uuid4(),
             subscriber_id=subscriber_id,
+            producer_id=data.producer_id,
             event_type=data.event_type,
             target_url=str(data.target_url),
         )
@@ -105,12 +107,16 @@ class SubscriberService:
         return list(result.scalars().all())
 
     async def get_matching_subscriptions(
-        self, db: AsyncSession, event_type: str
+        self, db: AsyncSession, event_type: str, producer_id: uuid.UUID
     ) -> list[Subscription]:
         result = await db.execute(
             select(Subscription).where(
                 Subscription.event_type == event_type,
-                Subscription.is_active == True
+                Subscription.is_active == True,
+                or_(
+                    Subscription.producer_id.is_(None),
+                    Subscription.producer_id == producer_id,
+                ),
             )
         )
         return list(result.scalars().all())
