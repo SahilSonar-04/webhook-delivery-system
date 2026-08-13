@@ -1,3 +1,3 @@
-from app.api.v1.endpoints import subscribers, events, dashboard
+from app.api.v1.endpoints import producers, subscribers, events, dashboard
 
-__all__ = ["subscribers", "events", "dashboard"]
+__all__ = ["producers", "subscribers", "events", "dashboard"]

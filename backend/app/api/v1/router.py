@@ -1,7 +1,13 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import subscribers, events, dashboard
+from app.api.v1.endpoints import producers, subscribers, events, dashboard
 
 api_router = APIRouter()
+
+api_router.include_router(
+    producers.router,
+    prefix="/producers",
+    tags=["producers"],
+)
 
 api_router.include_router(
     subscribers.router,
