@@ -9,6 +9,7 @@ type SetupStatus = "idle" | "provisioning" | "ready" | "error";
 type DeliveryStatus = "pending" | "delivering" | "delivered" | "failed" | "dead";
 
 interface Subscriber { id: string; api_key: string; name: string }
+interface Producer { id: string; api_key: string; name: string }
 interface Subscription { id: string; event_type: string; target_url: string }
 
 interface Attempt {
@@ -153,6 +154,7 @@ function StatusPill({ status }: { status: SetupStatus }) {
 export default function DemoPage() {
   const [setupStatus, setSetupStatus]   = useState<SetupStatus>("idle");
   const [subscriber, setSubscriber]     = useState<Subscriber | null>(null);
+  const [producer, setProducer]         = useState<Producer | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [scenario, setScenario]         = useState<Scenario>(SCENARIOS[0]);
   const [logs, setLogs]                 = useState<LogEntry[]>([]);
@@ -178,6 +180,7 @@ export default function DemoPage() {
   // ── provision ──────────────────────────────────────────────────────────
 
   const DEMO_STORAGE_KEY = "wds-demo-subscriber";
+  const DEMO_PRODUCER_STORAGE_KEY = "wds-demo-producer";
 
   const provision = useCallback(async () => {
     setSetupStatus("provisioning");
@@ -212,6 +215,36 @@ export default function DemoPage() {
       }
 
       setSubscriber(sub);
+
+      let prod: Producer | null = null;
+      const storedProd = localStorage.getItem(DEMO_PRODUCER_STORAGE_KEY);
+      if (storedProd) {
+        try {
+          prod = JSON.parse(storedProd);
+          addLog(`Reusing existing demo producer  id=${prod!.id.slice(0, 8)}...`, "ok");
+        } catch {
+          prod = null;
+        }
+      }
+
+      if (!prod) {
+        const tag = Math.random().toString(36).slice(2, 7);
+        const email = `demo-producer-${tag}@wds-demo.dev`;
+
+        addLog(`POST /api/v1/producers  email=${email}`, "info");
+        const prodRes = await fetch(`${API}/api/v1/producers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `Demo Producer ${tag}`, email }),
+        });
+        if (!prodRes.ok) throw new Error(`producer: ${prodRes.status} ${await prodRes.text()}`);
+        const createdProd = await prodRes.json();
+        prod = { id: createdProd.id, api_key: createdProd.api_key, name: createdProd.name };
+        localStorage.setItem(DEMO_PRODUCER_STORAGE_KEY, JSON.stringify(prod));
+        addLog(`Producer created  id=${prod.id.slice(0, 8)}...  key=${prod.api_key.slice(0, 16)}...`, "ok");
+      }
+
+      setProducer(prod);
 
       const sc = SCENARIOS[0];
       addLog(`POST .../subscriptions  event_type=${sc.eventType}`, "info");
@@ -272,7 +305,7 @@ export default function DemoPage() {
   // ── fire event ─────────────────────────────────────────────────────────
 
   const fireEvent = useCallback(async () => {
-    if (!subscriber || firing) return;
+    if (!subscriber || !producer || firing) return;
     setFiring(true);
 
     const sc  = scenario;
@@ -297,8 +330,8 @@ export default function DemoPage() {
     try {
       const res  = await fetch(`${API}/api/v1/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": subscriber.api_key },
-        body: JSON.stringify({ event_type: sc.eventType, payload, producer_id: "wds-demo", idempotency_key: key }),
+        headers: { "Content-Type": "application/json", "x-api-key": producer.api_key },
+        body: JSON.stringify({ event_type: sc.eventType, payload, idempotency_key: key }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? `HTTP ${res.status}`);
@@ -325,7 +358,7 @@ export default function DemoPage() {
       setFiring(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscriber, firing, scenario, lastIdempKey, addLog]);
+  }, [subscriber, producer, firing, scenario, lastIdempKey, addLog]);
 
   // ── poll attempts ──────────────────────────────────────────────────────
 
@@ -570,10 +603,10 @@ export default function DemoPage() {
                 ...s.btnPrimary,
                 width: "100%",
                 justifyContent: "center",
-                opacity: setupStatus !== "ready" || firing ? 0.45 : 1,
+                opacity: setupStatus !== "ready" || firing || !producer ? 0.45 : 1,
               }}
               onClick={fireEvent}
-              disabled={setupStatus !== "ready" || firing}
+              disabled={setupStatus !== "ready" || firing || !producer}
             >
               {firing
                 ? "Sending..."
@@ -617,6 +650,8 @@ export default function DemoPage() {
               {([
                 ["Subscriber ID", subscriber.id.slice(0, 20) + "..."],
                 ["API key",       subscriber.api_key.slice(0, 22) + "..."],
+                ["Producer ID", producer ? producer.id.slice(0, 20) + "..." : "—"],
+                ["Producer key", producer ? producer.api_key.slice(0, 22) + "..." : "—"],
                 ...(subscription
                   ? [["Sub event",    subscription.event_type],
                      ["Sub endpoint", ".../" + subscription.target_url.split("/").pop()]]
@@ -637,14 +672,16 @@ export default function DemoPage() {
               <pre style={{ ...s.pre, fontSize: 10 }}>
 {`curl -X POST ${API}/api/v1/events \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: ${subscriber.api_key}" \\
+  -H "x-api-key: ${producer?.api_key ?? "<producer_api_key>"}" \\
   -d '{
     "event_type": "${scenario.eventType}",
     "payload": ${JSON.stringify(PAYLOADS[scenario.eventType] ?? {})},
-    "producer_id": "my-service",
     "idempotency_key": "unique-key-001"
   }'`}
               </pre>
+              <div style={{ fontSize: 11, color: "#666", lineHeight: 1.6, marginTop: 10 }}>
+                Producer registration is open here for demo purposes — in production this would be an internal-only endpoint, not public self-service like subscriber registration is.
+              </div>
             </div>
           )}
         </div>
