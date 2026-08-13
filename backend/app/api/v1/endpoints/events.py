@@ -19,16 +19,6 @@ async def ingest_event(
     db: AsyncSession = Depends(get_db),
     producer: Subscriber = Depends(verify_api_key),
 ):
-    """
-    Accept an event from a producer.
-    Requires a valid x-api-key from a registered subscriber.
-    Stores the event, creates delivery attempts, queues async delivery.
-    Returns 202 Accepted immediately — does not wait for delivery.
-
-    If idempotency_key has already been seen, no new delivery attempts
-    are created and no new Celery tasks are queued — the original
-    deliveries stand.
-    """
     event, was_created = await event_service.create_event(db, data)
 
     if not was_created:

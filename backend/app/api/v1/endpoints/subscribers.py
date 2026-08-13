@@ -21,7 +21,6 @@ async def create_subscriber(
     data: SubscriberCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new subscriber. Returns api_key and secret — save them, shown only once."""
     try:
         subscriber = await subscriber_service.create_subscriber(db, data)
         return subscriber
@@ -43,7 +42,6 @@ async def create_subscription(
     db: AsyncSession = Depends(get_db),
     current_subscriber: Subscriber = Depends(get_current_subscriber),
 ):
-    """Register a URL to receive a specific event type."""
     if current_subscriber.id != subscriber_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     subscription = await subscriber_service.create_subscription(db, subscriber_id, data)
