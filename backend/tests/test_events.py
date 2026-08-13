@@ -3,7 +3,7 @@ from httpx import AsyncClient
 
 
 async def _register_producer(client: AsyncClient, email: str) -> dict:
-    resp = await client.post("/api/v1/subscribers", json={
+    resp = await client.post("/api/v1/producers", json={
         "name": "Producer", "email": email
     })
     return resp.json()
@@ -16,7 +16,6 @@ async def test_ingest_event_no_subscriptions(client: AsyncClient):
         json={
             "event_type": "order.created",
             "payload": {"order_id": 123},
-            "producer_id": "shop-service",
             "idempotency_key": "test-key-001"
         },
         headers={"x-api-key": producer["api_key"]},
@@ -32,7 +31,6 @@ async def test_ingest_event_requires_api_key(client: AsyncClient):
     response = await client.post("/api/v1/events", json={
         "event_type": "order.created",
         "payload": {"order_id": 123},
-        "producer_id": "shop-service",
         "idempotency_key": "test-key-noauth"
     })
     assert response.status_code == 422
@@ -44,10 +42,26 @@ async def test_ingest_event_rejects_invalid_api_key(client: AsyncClient):
         json={
             "event_type": "order.created",
             "payload": {"order_id": 123},
-            "producer_id": "shop-service",
             "idempotency_key": "test-key-badauth"
         },
-        headers={"x-api-key": "wh_notreal"},
+        headers={"x-api-key": "pk_notreal"},
+    )
+    assert response.status_code == 401
+
+
+async def test_ingest_event_rejects_subscriber_key(client: AsyncClient):
+    sub_resp = await client.post("/api/v1/subscribers", json={
+        "name": "Not A Producer", "email": "not-a-producer-events-test@test.com"
+    })
+    sub_data = sub_resp.json()
+    response = await client.post(
+        "/api/v1/events",
+        json={
+            "event_type": "order.created",
+            "payload": {"order_id": 123},
+            "idempotency_key": "test-key-wrongkeytype"
+        },
+        headers={"x-api-key": sub_data["api_key"]},
     )
     assert response.status_code == 401
 
@@ -57,7 +71,6 @@ async def test_ingest_event_idempotency(client: AsyncClient):
     payload = {
         "event_type": "order.created",
         "payload": {"order_id": 456},
-        "producer_id": "shop-service",
         "idempotency_key": "unique-key-abc"
     }
     headers = {"x-api-key": producer["api_key"]}
@@ -86,7 +99,6 @@ async def test_ingest_event_idempotency_does_not_requeue(client: AsyncClient):
     payload = {
         "event_type": "order.created",
         "payload": {"order_id": 1},
-        "producer_id": "shop",
         "idempotency_key": "idem-requeue-001"
     }
     r1 = await client.post("/api/v1/events", json=payload, headers=headers)
@@ -117,7 +129,6 @@ async def test_ingest_event_queues_for_subscribers(client: AsyncClient):
         json={
             "event_type": "order.created",
             "payload": {"order_id": 789},
-            "producer_id": "shop-service",
             "idempotency_key": "key-queued-001"
         },
         headers={"x-api-key": producer["api_key"]},
@@ -133,7 +144,6 @@ async def test_get_event_by_id(client: AsyncClient):
         json={
             "event_type": "payment.received",
             "payload": {"amount": 99.99},
-            "producer_id": "billing",
             "idempotency_key": "pay-001"
         },
         headers={"x-api-key": producer["api_key"]},
@@ -162,7 +172,6 @@ async def test_list_events(client: AsyncClient):
             json={
                 "event_type": "ping",
                 "payload": {"i": i},
-                "producer_id": "test",
                 "idempotency_key": f"list-test-{i}"
             },
             headers=headers,

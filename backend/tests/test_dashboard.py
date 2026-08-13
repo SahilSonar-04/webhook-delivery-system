@@ -20,7 +20,7 @@ async def test_dashboard_stats_after_events(client: AsyncClient):
     with patch("app.api.v1.endpoints.events.deliver_webhook") as mock_task:
         mock_task.delay = lambda *a, **kw: None
 
-        producer_resp = await client.post("/api/v1/subscribers", json={
+        producer_resp = await client.post("/api/v1/producers", json={
             "name": "Producer", "email": "stats-producer@test.com"
         })
         producer = producer_resp.json()
@@ -41,7 +41,6 @@ async def test_dashboard_stats_after_events(client: AsyncClient):
                 json={
                     "event_type": "test.event",
                     "payload": {},
-                    "producer_id": "p",
                     "idempotency_key": f"stats-key-{i}"
                 },
                 headers={"x-api-key": producer["api_key"]},
@@ -51,3 +50,4 @@ async def test_dashboard_stats_after_events(client: AsyncClient):
     assert stats["total_events"] == 2
     assert stats["total_attempts"] == 2
     assert stats["pending"] == 2
+    

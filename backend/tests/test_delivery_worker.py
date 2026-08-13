@@ -10,12 +10,13 @@ from app.workers.delivery_worker import calculate_retry_delay, sign_payload
 # This file focuses on the attempt_delivery logic paths
 
 async def test_attempt_delivery_success(db_session, engine):
-    """Test successful HTTP delivery updates status to delivered."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
     from app.services.subscriber_service import subscriber_service
+    from app.services.producer_service import producer_service
     from app.services.event_service import event_service
     from app.services.delivery_service import delivery_service
     from app.schemas.subscriber import SubscriberCreate, SubscriptionCreate
+    from app.schemas.producer import ProducerCreate
     from app.schemas.event import EventCreate
     from app.workers.delivery_worker import attempt_delivery
 
@@ -27,9 +28,13 @@ async def test_attempt_delivery_success(db_session, engine):
         db_session, sub.id,
         SubscriptionCreate(event_type="ship", target_url="http://mock/hook"),
     )
+    producer = await producer_service.create_producer(
+        db_session, ProducerCreate(name="Worker Test Producer", email="worker-success@test.com")
+    )
     event, _ = await event_service.create_event(
         db_session,
-        EventCreate(event_type="ship", payload={}, producer_id="p", idempotency_key="adv-001"),
+        EventCreate(event_type="ship", payload={}, idempotency_key="adv-001"),
+        producer.id,
     )
     attempt = await delivery_service.create_delivery_attempt(
         db_session, event.id, subscription.id
@@ -66,12 +71,13 @@ async def test_attempt_delivery_success(db_session, engine):
 
 
 async def test_attempt_delivery_failure_schedules_retry(db_session, engine):
-    """Test failed HTTP delivery sets status to failed with retry time."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
     from app.services.subscriber_service import subscriber_service
+    from app.services.producer_service import producer_service
     from app.services.event_service import event_service
     from app.services.delivery_service import delivery_service
     from app.schemas.subscriber import SubscriberCreate, SubscriptionCreate
+    from app.schemas.producer import ProducerCreate
     from app.schemas.event import EventCreate
     from app.workers.delivery_worker import attempt_delivery
     import httpx
@@ -83,9 +89,13 @@ async def test_attempt_delivery_failure_schedules_retry(db_session, engine):
         db_session, sub.id,
         SubscriptionCreate(event_type="fail.test", target_url="http://mock/fail"),
     )
+    producer = await producer_service.create_producer(
+        db_session, ProducerCreate(name="Worker Test Producer 2", email="worker-failure@test.com")
+    )
     event, _ = await event_service.create_event(
         db_session,
-        EventCreate(event_type="fail.test", payload={}, producer_id="p", idempotency_key="adv-002"),
+        EventCreate(event_type="fail.test", payload={}, idempotency_key="adv-002"),
+        producer.id,
     )
     attempt = await delivery_service.create_delivery_attempt(
         db_session, event.id, subscription.id
@@ -117,3 +127,4 @@ async def test_attempt_delivery_failure_schedules_retry(db_session, engine):
         assert updated.status == "failed"
         assert updated.next_retry_at is not None
         assert updated.response_code == 500
+        
