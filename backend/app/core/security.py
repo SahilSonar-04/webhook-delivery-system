@@ -2,7 +2,9 @@ from fastapi import Header, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.services.subscriber_service import subscriber_service
+from app.services.producer_service import producer_service
 from app.models.subscriber import Subscriber
+from app.models.producer import Producer
 
 
 async def verify_api_key(
@@ -13,3 +15,13 @@ async def verify_api_key(
     if not subscriber:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return subscriber
+
+
+async def verify_producer_api_key(
+    x_api_key: str = Header(..., description="Your producer API key"),
+    db: AsyncSession = Depends(get_db),
+) -> Producer:
+    producer = await producer_service.get_producer_by_api_key(db, x_api_key)
+    if not producer:
+        raise HTTPException(status_code=401, detail="Invalid producer API key")
+    return producer

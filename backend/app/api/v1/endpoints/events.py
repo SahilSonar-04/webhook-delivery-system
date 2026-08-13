@@ -6,8 +6,8 @@ from app.services.subscriber_service import subscriber_service
 from app.services.delivery_service import delivery_service
 from app.schemas.event import EventCreate, EventResponse
 from app.workers.delivery_worker import deliver_webhook
-from app.core.security import verify_api_key
-from app.models.subscriber import Subscriber
+from app.core.security import verify_producer_api_key
+from app.models.producer import Producer
 import uuid
 
 router = APIRouter()
@@ -17,9 +17,9 @@ router = APIRouter()
 async def ingest_event(
     data: EventCreate,
     db: AsyncSession = Depends(get_db),
-    producer: Subscriber = Depends(verify_api_key),
+    producer: Producer = Depends(verify_producer_api_key),
 ):
-    event, was_created = await event_service.create_event(db, data)
+    event, was_created = await event_service.create_event(db, data, producer.id)
 
     if not was_created:
         return {
@@ -29,7 +29,7 @@ async def ingest_event(
         }
 
     subscriptions = await subscriber_service.get_matching_subscriptions(
-        db, data.event_type
+        db, data.event_type, producer.id
     )
 
     if not subscriptions:
