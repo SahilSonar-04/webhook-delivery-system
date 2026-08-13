@@ -19,7 +19,7 @@ class EventService:
         return result.scalar_one_or_none()
 
     async def create_event(
-        self, db: AsyncSession, data: EventCreate
+        self, db: AsyncSession, data: EventCreate, producer_id: uuid.UUID
     ) -> tuple[Event, bool]:
         existing = await self.get_event_by_idempotency_key(db, data.idempotency_key)
         if existing:
@@ -29,7 +29,7 @@ class EventService:
             id=uuid.uuid4(),
             event_type=data.event_type,
             payload=data.payload,
-            producer_id=data.producer_id,
+            producer_id=producer_id,
             idempotency_key=data.idempotency_key,
         )
         db.add(event)

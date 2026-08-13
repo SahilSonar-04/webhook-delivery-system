@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey
 from sqlalchemy import DateTime as SaDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -17,7 +17,9 @@ class Event(Base):
     )
     event_type: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    producer_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    producer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("producers.id"), nullable=False, index=True
+    )
     idempotency_key: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
@@ -26,6 +28,7 @@ class Event(Base):
     )
 
     # Relationships
+    producer: Mapped["Producer"] = relationship(back_populates="events")
     delivery_attempts: Mapped[list["DeliveryAttempt"]] = relationship(
         back_populates="event"
     )

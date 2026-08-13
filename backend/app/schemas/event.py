@@ -7,7 +7,6 @@ from typing import Any
 class EventCreate(BaseModel):
     event_type: str
     payload: dict[str, Any]
-    producer_id: str
     idempotency_key: str
 
 
@@ -15,7 +14,7 @@ class EventResponse(BaseModel):
     id: UUID
     event_type: str
     payload: dict[str, Any]
-    producer_id: str
+    producer_id: UUID
     idempotency_key: str
     created_at: datetime
 
