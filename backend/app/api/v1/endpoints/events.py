@@ -1,5 +1,8 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+
 from app.db.database import get_db
 from app.services.event_service import event_service
 from app.services.subscriber_service import subscriber_service
@@ -7,10 +10,11 @@ from app.services.delivery_service import delivery_service
 from app.schemas.event import EventCreate, EventResponse
 from app.workers.delivery_worker import deliver_webhook
 from app.core.security import verify_producer_api_key
+from app.core.logging import get_logger
 from app.models.producer import Producer
-import uuid
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.post("", status_code=202)
@@ -19,9 +23,17 @@ async def ingest_event(
     db: AsyncSession = Depends(get_db),
     producer: Producer = Depends(verify_producer_api_key),
 ):
+    correlation_id = structlog.contextvars.get_contextvars().get("correlation_id")
+
     event, was_created = await event_service.create_event(db, data, producer.id)
 
     if not was_created:
+        logger.info(
+            "event.duplicate",
+            event_id=str(event.id),
+            event_type=data.event_type,
+            idempotency_key=data.idempotency_key,
+        )
         return {
             "event_id": str(event.id),
             "message": "Event already processed for this idempotency_key. No new deliveries queued.",
@@ -34,6 +46,11 @@ async def ingest_event(
 
     if not subscriptions:
         await db.commit()
+        logger.info(
+            "event.no_subscriptions",
+            event_id=str(event.id),
+            event_type=data.event_type,
+        )
         return {
             "event_id": str(event.id),
             "message": "Event accepted. No active subscriptions found.",
@@ -51,8 +68,16 @@ async def ingest_event(
 
     await db.commit()
 
+    logger.info(
+        "event.ingested",
+        event_id=str(event.id),
+        event_type=data.event_type,
+        producer_id=str(producer.id),
+        queued=queued,
+    )
+
     for attempt_id in attempt_ids:
-        deliver_webhook.delay(attempt_id)
+        deliver_webhook.delay(attempt_id, correlation_id)
 
     return {
         "event_id": str(event.id),

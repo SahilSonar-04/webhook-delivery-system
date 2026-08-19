@@ -10,15 +10,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
+import structlog
+
 from app.workers.celery_app import celery_app
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.models.delivery import DeliveryAttempt
 from app.models.subscriber import Subscription, Subscriber
 
 import httpx
-import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def make_session() -> tuple:
@@ -49,7 +51,7 @@ async def publish_event(event_type: str, data: dict):
         payload = json.dumps({"type": event_type, "data": data})
         await r.publish("webhook_events", payload)
     except Exception as e:
-        logger.error(f"Failed to publish event: {e}")
+        logger.error("redis.publish_failed", error=str(e))
     finally:
         await r.aclose()
 
@@ -74,8 +76,14 @@ def sign_payload(payload: str, secret: str) -> str:
     return mac.hexdigest()
 
 
-async def attempt_delivery(attempt_id: str):
+async def attempt_delivery(attempt_id: str, correlation_id: str | None = None):
     """Core async delivery logic — runs inside a fresh event loop each time."""
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        correlation_id=correlation_id or str(uuid.uuid4()),
+        attempt_id=attempt_id,
+    )
+
     engine, session_factory = make_session()
 
     try:
@@ -92,12 +100,14 @@ async def attempt_delivery(attempt_id: str):
             attempt = result.scalar_one_or_none()
 
             if not attempt:
-                logger.error(f"Delivery attempt {attempt_id} not found")
+                logger.error("delivery.attempt_not_found")
                 return
 
             event = attempt.event
             subscription = attempt.subscription
             subscriber = subscription.subscriber
+
+            structlog.contextvars.bind_contextvars(event_type=event.event_type)
 
             # Snapshot previous failure details before overwriting so history
             # isn't silently lost when the row is updated on this attempt.
@@ -109,6 +119,8 @@ async def attempt_delivery(attempt_id: str):
             attempt.status = "delivering"
             attempt.attempt_number += 1
             await db.commit()
+
+            logger.info("delivery.started", attempt_number=attempt.attempt_number)
 
             await publish_event("delivery_started", {
                 "attempt_id": attempt_id,
@@ -157,7 +169,11 @@ async def attempt_delivery(attempt_id: str):
                 if response.status_code < 300:
                     attempt.status = "delivered"
                     attempt.delivered_at = datetime.now(timezone.utc)
-                    logger.info(f"Delivered {attempt_id} → {response.status_code}")
+                    logger.info(
+                        "delivery.succeeded",
+                        response_code=response.status_code,
+                        duration_ms=round(duration_ms, 2),
+                    )
 
                     await publish_event("delivery_success", {
                         "attempt_id": attempt_id,
@@ -184,7 +200,11 @@ async def attempt_delivery(attempt_id: str):
                 if attempt.attempt_number >= settings.MAX_RETRY_ATTEMPTS:
                     attempt.status = "dead"
                     attempt.next_retry_at = None
-                    logger.warning(f"Attempt {attempt_id} moved to dead letter queue")
+                    logger.warning(
+                        "delivery.dead_lettered",
+                        attempt_number=attempt.attempt_number,
+                        error=current_error,
+                    )
 
                     await publish_event("delivery_dead", {
                         "attempt_id": attempt_id,
@@ -202,7 +222,12 @@ async def attempt_delivery(attempt_id: str):
                     _retry_delay = delay
                     attempt.status = "failed"
                     attempt.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
-                    logger.info(f"Retry {attempt.attempt_number} in {delay}s")
+                    logger.info(
+                        "delivery.retry_scheduled",
+                        attempt_number=attempt.attempt_number,
+                        retry_in_seconds=delay,
+                        error=current_error,
+                    )
 
                     await publish_event("delivery_failed", {
                         "attempt_id": attempt_id,
@@ -219,11 +244,11 @@ async def attempt_delivery(attempt_id: str):
 
             if _trigger_ai:
                 from app.workers.ai_worker import analyze_failure
-                analyze_failure.delay(attempt_id)
+                analyze_failure.delay(attempt_id, correlation_id)
 
             if _retry_delay is not None:
                 deliver_webhook.apply_async(
-                    args=[attempt_id],
+                    args=[attempt_id, correlation_id],
                     countdown=_retry_delay,
                 )
 
@@ -234,10 +259,10 @@ async def attempt_delivery(attempt_id: str):
 
 
 @celery_app.task(name="deliver_webhook", bind=True, max_retries=0)
-def deliver_webhook(self, attempt_id: str):
+def deliver_webhook(self, attempt_id: str, correlation_id: str | None = None):
     """
     Celery task entry point.
     Each call gets a completely fresh event loop + DB engine, so asyncpg
     never tries to reuse a connection from a previous (closed) loop.
     """
-    asyncio.run(attempt_delivery(attempt_id))
+    asyncio.run(attempt_delivery(attempt_id, correlation_id))

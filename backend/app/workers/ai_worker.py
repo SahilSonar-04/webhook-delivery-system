@@ -6,12 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
+import structlog
+
 from app.workers.celery_app import celery_app
 from app.models.delivery import DeliveryAttempt, AIFailureAnalysis
 from app.core.config import settings
+from app.core.logging import get_logger
 
-import logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def make_session() -> tuple:
@@ -29,8 +31,14 @@ def make_session() -> tuple:
     return engine, session_factory
 
 
-async def run_ai_analysis(attempt_id: str):
+async def run_ai_analysis(attempt_id: str, correlation_id: str | None = None):
     """Analyze failed delivery using Groq AI."""
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        correlation_id=correlation_id or str(uuid.uuid4()),
+        attempt_id=attempt_id,
+    )
+
     engine, session_factory = make_session()
 
     try:
@@ -43,6 +51,7 @@ async def run_ai_analysis(attempt_id: str):
             attempt = result.scalar_one_or_none()
 
             if not attempt:
+                logger.error("ai_analysis.attempt_not_found")
                 return
 
             # Idempotency guard — skip if already analyzed
@@ -52,6 +61,7 @@ async def run_ai_analysis(attempt_id: str):
                 )
             )
             if existing.scalar_one_or_none():
+                logger.info("ai_analysis.already_exists")
                 return
 
             context = {
@@ -108,10 +118,15 @@ Respond with exactly this JSON structure:
                     confidence_score=float(analysis_data.get("confidence_score", 0.5)),
                     severity=analysis_data.get("severity", "medium"),
                 )
-                logger.info(f"AI analysis complete for {attempt_id}")
+                logger.info(
+                    "ai_analysis.completed",
+                    failure_category=analysis.failure_category,
+                    severity=analysis.severity,
+                    confidence_score=analysis.confidence_score,
+                )
 
             except Exception as e:
-                logger.error(f"AI analysis failed for {attempt_id}: {e}")
+                logger.error("ai_analysis.failed", error=str(e))
                 analysis = AIFailureAnalysis(
                     id=uuid.uuid4(),
                     delivery_attempt_id=attempt.id,
@@ -131,5 +146,6 @@ Respond with exactly this JSON structure:
 
 
 @celery_app.task(name="analyze_failure")
-def analyze_failure(attempt_id: str):
-    asyncio.run(run_ai_analysis(attempt_id))
+def analyze_failure(attempt_id: str, correlation_id: str | None = None):
+    asyncio.run(run_ai_analysis(attempt_id, correlation_id))
+    

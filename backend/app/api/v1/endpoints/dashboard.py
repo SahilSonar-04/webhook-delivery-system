@@ -9,15 +9,15 @@ from app.schemas.delivery import (
     RetryResponse,
 )
 from app.workers.delivery_worker import deliver_webhook
+from app.core.logging import get_logger
 import uuid
 import json
 import asyncio
-import logging
 import redis.asyncio as aioredis
 from app.core.config import settings
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -65,7 +65,11 @@ async def retry_delivery(
         raise HTTPException(status_code=404, detail="Delivery attempt not found")
 
     await db.commit()
-    deliver_webhook.delay(str(attempt.id))
+
+    correlation_id = str(uuid.uuid4())
+    logger.info("delivery.manual_retry", attempt_id=str(attempt.id), correlation_id=correlation_id)
+    deliver_webhook.delay(str(attempt.id), correlation_id)
+
     return RetryResponse(
         message="Retry queued successfully",
         delivery_attempt_id=attempt.id,
@@ -91,7 +95,7 @@ async def stream_events(request: Request):
         try:
             await pubsub.subscribe("webhook_events")
         except Exception as e:
-            logger.error(f"SSE: failed to subscribe to Redis: {e}")
+            logger.error("sse.subscribe_failed", error=str(e))
             await r.aclose()
             return
 
@@ -106,7 +110,7 @@ async def stream_events(request: Request):
                         timeout=1.0,
                     )
                 except Exception as e:
-                    logger.error(f"SSE: Redis pubsub error: {e}")
+                    logger.error("sse.pubsub_error", error=str(e))
                     yield f"data: {json.dumps({'type': 'error', 'message': 'stream interrupted'})}\n\n"
                     break
 
