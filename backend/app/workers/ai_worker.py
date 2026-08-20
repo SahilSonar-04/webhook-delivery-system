@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 import structlog
 
 from app.workers.celery_app import celery_app
+from app.workers.metrics import push_ai_analysis
 from app.models.delivery import DeliveryAttempt, AIFailureAnalysis
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -140,6 +141,10 @@ Respond with exactly this JSON structure:
             if analysis:
                 db.add(analysis)
                 await db.commit()
+                push_ai_analysis(
+                    failure_category=analysis.failure_category,
+                    severity=analysis.severity,
+                )
 
     finally:
         await engine.dispose()
@@ -148,4 +153,3 @@ Respond with exactly this JSON structure:
 @celery_app.task(name="analyze_failure")
 def analyze_failure(attempt_id: str, correlation_id: str | None = None):
     asyncio.run(run_ai_analysis(attempt_id, correlation_id))
-    

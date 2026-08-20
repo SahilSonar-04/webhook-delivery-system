@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     GROQ_API_KEY: str
     FRONTEND_URL: str = ""
+    PUSHGATEWAY_URL: str = "http://pushgateway:9091"
 
     @property
     def cors_origins(self) -> list[str]:

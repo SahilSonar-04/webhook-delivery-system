@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 import structlog
 
 from app.workers.celery_app import celery_app
+from app.workers.metrics import push_delivery_outcome, push_retry_scheduled
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.delivery import DeliveryAttempt
@@ -182,6 +183,13 @@ async def attempt_delivery(attempt_id: str, correlation_id: str | None = None):
                         "response_code": response.status_code,
                         "duration_ms": duration_ms,
                     })
+
+                    push_delivery_outcome(
+                        event_type=event.event_type,
+                        status="delivered",
+                        attempt_number=attempt.attempt_number,
+                        duration_ms=duration_ms,
+                    )
                 else:
                     raise Exception(f"Non-2xx response: {response.status_code}")
 
@@ -213,6 +221,13 @@ async def attempt_delivery(attempt_id: str, correlation_id: str | None = None):
                         "error": str(e)[:200],
                     })
 
+                    push_delivery_outcome(
+                        event_type=event.event_type,
+                        status="dead",
+                        attempt_number=attempt.attempt_number,
+                        duration_ms=attempt.duration_ms,
+                    )
+
                     # Flag for post-commit dispatch — do NOT call before commit.
                     _trigger_ai = True
                 else:
@@ -237,6 +252,14 @@ async def attempt_delivery(attempt_id: str, correlation_id: str | None = None):
                         "next_retry_in_seconds": delay,
                         "error": str(e)[:200],
                     })
+
+                    push_delivery_outcome(
+                        event_type=event.event_type,
+                        status="failed",
+                        attempt_number=attempt.attempt_number,
+                        duration_ms=attempt.duration_ms,
+                    )
+                    push_retry_scheduled(event_type=event.event_type, retry_in_seconds=delay)
 
             # Commit all status changes before dispatching any follow-up tasks
             # so workers never observe a stale/uncommitted row.
