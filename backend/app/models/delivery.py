@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Text, Float, ForeignKey
+from sqlalchemy import String, Integer, Text, Float, ForeignKey, Index
 from sqlalchemy import DateTime as SaDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -57,6 +57,10 @@ class DeliveryAttempt(Base):
     ai_analysis: Mapped["AIFailureAnalysis | None"] = relationship(
         back_populates="delivery_attempt",
         uselist=False
+    )
+
+    __table_args__ = (
+        Index("ix_delivery_attempts_status_created_at", "status", created_at.desc()),
     )
 
 
