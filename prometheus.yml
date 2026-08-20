@@ -5,3 +5,8 @@ scrape_configs:
   - job_name: "wds-backend"
     static_configs:
       - targets: ["backend:8000"]
+
+  - job_name: "wds-pushgateway"
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
