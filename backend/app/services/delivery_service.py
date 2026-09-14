@@ -69,7 +69,7 @@ class DeliveryService:
         return list(result.scalars().all())
 
     async def get_dead_letter_queue(
-        self, db: AsyncSession
+        self, db: AsyncSession, skip: int = 0, limit: int = 50
     ) -> list[DeliveryAttempt]:
         result = await db.execute(
             select(DeliveryAttempt)
@@ -79,6 +79,8 @@ class DeliveryService:
             )
             .where(DeliveryAttempt.status == "dead")
             .order_by(DeliveryAttempt.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

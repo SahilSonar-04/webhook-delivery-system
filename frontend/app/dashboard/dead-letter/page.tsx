@@ -10,7 +10,7 @@ export default function DeadLetterPage() {
 
   const fetchDead = async () => {
     try {
-      const data = await api.get("/api/v1/dashboard/dead-letter");
+      const data = await api.get("/api/v1/dashboard/dead-letter?limit=50");
       setAttempts(data);
     } catch (e) {
       console.error(e);
@@ -51,7 +51,7 @@ export default function DeadLetterPage() {
           padding: "1px 8px",
           borderRadius: "var(--radius)",
         }}>
-          {attempts.length} items
+          {loading ? "Loading..." : `${attempts.length} shown`}
         </span>
       </div>
 

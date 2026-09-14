@@ -251,12 +251,15 @@ export default function DemoPage() {
       const scrRes = await fetch(`${API}/api/v1/subscribers/${sub.id}/subscriptions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": sub.api_key },
-        body: JSON.stringify({ event_type: sc.eventType, target_url: sc.endpoint }),
+        body: JSON.stringify({ event_type: sc.eventType, target_url: sc.endpoint, producer_id: prod.id }),
       });
       if (!scrRes.ok) {
-        if (scrRes.status === 401) {
+        if (scrRes.status === 401 || scrRes.status === 403 || scrRes.status === 404) {
           localStorage.removeItem(DEMO_STORAGE_KEY);
-          addLog("Stored demo subscriber is no longer valid — clearing and retrying", "warn");
+          localStorage.removeItem(DEMO_PRODUCER_STORAGE_KEY);
+          setSubscriber(null);
+          setProducer(null);
+          addLog("Stored demo credentials are no longer valid — clearing and retrying", "warn");
           setSetupStatus("idle");
           return provision();
         }
@@ -273,9 +276,22 @@ export default function DemoPage() {
     }
   }, [addLog]);
 
+  const resetSession = useCallback(() => {
+    localStorage.removeItem(DEMO_STORAGE_KEY);
+    localStorage.removeItem(DEMO_PRODUCER_STORAGE_KEY);
+    setSubscriber(null);
+    setProducer(null);
+    setSubscription(null);
+    setAttempts([]);
+    setTotalFired(0);
+    sessionEventIds.current.clear();
+    addLog("Demo session reset — provisioning fresh session...", "sys");
+    provision();
+  }, [provision, addLog]);
+
   // ── switch scenario ────────────────────────────────────────────────────
 
-  const applyScenario = useCallback(async (sc: Scenario, sub: Subscriber) => {
+  const applyScenario = useCallback(async (sc: Scenario, sub: Subscriber, prod?: Producer | null) => {
     setScenario(sc);
     setShowSig(false);
     setLastIdempKey(null);
@@ -291,7 +307,7 @@ export default function DemoPage() {
       const res = await fetch(`${API}/api/v1/subscribers/${sub.id}/subscriptions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": sub.api_key },
-        body: JSON.stringify({ event_type: sc.eventType, target_url: sc.endpoint }),
+        body: JSON.stringify({ event_type: sc.eventType, target_url: sc.endpoint, ...(prod?.id ? { producer_id: prod.id } : {}) }),
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const s = await res.json();
@@ -334,7 +350,15 @@ export default function DemoPage() {
         body: JSON.stringify({ event_type: sc.eventType, payload, idempotency_key: key }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail ?? `HTTP ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          localStorage.removeItem(DEMO_PRODUCER_STORAGE_KEY);
+          setProducer(null);
+          setSetupStatus("idle");
+          addLog("Stored demo producer is invalid — cleared. Please retry setup.", "warn");
+        }
+        throw new Error(data.detail ?? `HTTP ${res.status}`);
+      }
 
       const eventId: string = data.event_id;
       const queued: number  = data.queued ?? 0;
@@ -515,8 +539,15 @@ export default function DemoPage() {
         </div>
         <div style={s.headerRight}>
           <StatusPill status={setupStatus} />
+          <button
+            style={{ ...s.btnSm, padding: "6px 12px", color: "#888", border: "1px solid #333" }}
+            onClick={resetSession}
+            title="Clear stored demo credentials and start completely fresh"
+          >
+            Reset session
+          </button>
           {setupStatus !== "ready" && setupStatus !== "provisioning" && (
-            <button style={s.btnPrimary} onClick={provision}>
+            <button style={s.btnPrimary} onClick={resetSession}>
               {setupStatus === "error" ? "Retry setup" : "Start demo"}
             </button>
           )}
@@ -552,7 +583,7 @@ export default function DemoPage() {
                 return (
                   <div
                     key={sc.key}
-                    onClick={() => { if (setupStatus === "ready" && subscriber) applyScenario(sc, subscriber); }}
+                    onClick={() => { if (setupStatus === "ready" && subscriber) applyScenario(sc, subscriber, producer); }}
                     style={{
                       ...s.scenarioCard,
                       borderColor: active ? sc.tagColor : "#2a2a2a",

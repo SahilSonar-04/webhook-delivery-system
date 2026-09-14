@@ -77,9 +77,13 @@ async def retry_delivery(
 
 
 @router.get("/dead-letter", response_model=list[DeliveryAttemptResponse])
-async def get_dead_letter_queue(db: AsyncSession = Depends(get_db)):
+async def get_dead_letter_queue(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
     """All deliveries that exhausted retries."""
-    return await delivery_service.get_dead_letter_queue(db)
+    return await delivery_service.get_dead_letter_queue(db, skip=skip, limit=limit)
 
 
 @router.get("/stream")
